@@ -30,9 +30,12 @@ def run_doctor(ws: Workspace) -> list[dict]:
         try:
             state = ws.load_state()
         except (AdvisorError, OSError, UnicodeDecodeError) as exc:
+            message = str(exc)
+            if "状态文件" not in message:
+                message = f"状态文件无法读取：{message}"
             issues.append({
                 "level": "error",
-                "message": str(exc),
+                "message": message,
                 "path": "ventures/.state.json",
             })
 
@@ -102,7 +105,7 @@ def run_doctor(ws: Workspace) -> list[dict]:
         todos_path = target["path"] / "todos.md"
         try:
             todo_items = parse_todos(read_text(todos_path)) if todos_path.exists() else []
-        except (OSError, UnicodeDecodeError) as exc:
+        except (OSError, UnicodeDecodeError, AdvisorError) as exc:
             issues.append({
                 "level": "error",
                 "message": f"无法读取待办：{exc}",
@@ -136,7 +139,7 @@ def run_doctor(ws: Workspace) -> list[dict]:
                 note_rel = f"{target['rel']}/discussions/{note.name}"
                 try:
                     meta, _ = split_frontmatter(read_text(note))
-                except (OSError, UnicodeDecodeError) as exc:
+                except (OSError, UnicodeDecodeError, AdvisorError) as exc:
                     issues.append({
                         "level": "error",
                         "message": f"无法读取纪要：{exc}",

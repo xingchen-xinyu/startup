@@ -39,7 +39,7 @@ python .claude/skills/startup-advisor/scripts/advisor.py
 3. 运行 `ADVISOR resume --json`，读取未结束讨论、未完成待办和目标列表。
 4. 先展示“上次停在这里”（最多 3 条；其余提示“还有 N 条”），再询问：继续上次、切换目标、在现有项目开新话题、开新想法，还是先看待办。
 5. 没有任何未结束讨论时，说明情况并询问今天想聊什么。
-6. 根据选择载入上下文：
+6. 根据选择载入上下文；切换到已有目标时先运行 `ADVISOR project use <ref>`，让后续续接以该目标为准：
    - 正式项目：`PROJECT.md`、最近 3 条纪要、未决问题、未完成待办、`decisions.md`。
    - 临时想法：`IDEA.md` 及同样内容。
 7. 开始讨论。
@@ -48,8 +48,8 @@ python .claude/skills/startup-advisor/scripts/advisor.py
 
 ## 目标路由
 
-- 指定项目/想法：先匹配；失败时列出可用目标并询问，不要猜。
-- 在现有项目里开新话题：`ADVISOR note new <ref> --title "<主题>"`，正文由你写入。
+- 指定项目/想法：先匹配；失败时列出可用目标并询问，不要猜。切换到已有目标时运行 `ADVISOR project use <ref>`。
+- 在现有项目里开新话题：`ADVISOR note new <ref> --title "<主题>" --json`，正文由你写入。
 - 新想法但未确定立项：`ADVISOR idea new --title "<标题>" [--one-liner "..."]`，不要要求用户先命名或填表。
 - 明确要建正式项目：`ADVISOR project new --name "<名称>" [--one-liner "..."]`。
 - 用户犹豫时，优先建议先进临时区。
@@ -62,7 +62,7 @@ python .claude/skills/startup-advisor/scripts/advisor.py
 |---|---|
 | 结论 | 写入当前纪要的「结论」节 |
 | 决策 | `ADVISOR decision add <ref> --title ... --decision ...`，并同步纪要 |
-| 行动项 | `ADVISOR todo add <ref> --text ... [--priority P1] [--due YYYY-MM-DD] [--source <note new --json 返回的 source；也可直接传 rel，CLI 会自动去掉目标前缀>]` |
+| 行动项 | `ADVISOR todo add <ref> --text ... [--priority P1] [--due YYYY-MM-DD] [--source <由 ADVISOR note new <ref> --title "..." --json 返回的 source；也可直接传 rel，CLI 会自动去掉目标前缀>]` |
 | 愿景/阶段/假设变化 | 编辑 `PROJECT.md`，并用 `ADVISOR project update <ref> --next-action ...` 同步元数据 |
 | 新想法 | `ADVISOR idea new ...` |
 | 专项方案 | 写入 `<目标目录>/assets/<主题>.md` |
@@ -73,10 +73,10 @@ python .claude/skills/startup-advisor/scripts/advisor.py
 
 当用户说“收尾/今天就到这”、话题自然结束或上下文将满时：
 
-1. 整理当前纪要：结论、未决问题、下一步。
+1. 整理当前纪要：结论、未决问题，并把下一步写进纪要的 `## 下一步` 节（创建纪要时也可传 `--next-step`）；`resume` 会读取它。
 2. 把行动项同步到 `todos.md`。
 3. 判断纪要状态：仍需讨论 → 保持 `status: open`；只剩执行类待办 → `ADVISOR note close <note new 返回的 rel 或绝对路径>`。
-4. 运行 `ADVISOR checkpoint <ref> [--next-action "<下一步>"]`。`--next-action` 只更新正式项目的元数据；目标是未立项想法时，改为把下一步写进 `IDEA.md`。
+4. 运行 `ADVISOR checkpoint <ref> [--next-action "<下一步>"]`；它会把该目标设为活跃目标。`--next-action` 只更新正式项目的元数据；目标是未立项想法时，改为把下一步写进 `IDEA.md`。
 5. 向用户输出：本次产出、未决问题、待办、下次接续点。
 
 ## 首次个人访谈
@@ -104,7 +104,7 @@ python .claude/skills/startup-advisor/scripts/advisor.py
 
 ## 边界
 
-- 不删除任何项目、纪要或待办。结束方式按对象区分：正式项目用 `stage: archived`，未立项想法用 `status: archived`，讨论纪要用 `status: closed`，待办标记完成。不要给纪要或待办写入未定义的归档状态。
+- 不删除用户数据；项目建设/想法归档代替删除；转正时在完整复制后清理源想法目录除外。结束方式按对象区分：正式项目用 `stage: archived`，未立项想法用 `status: archived`，讨论纪要用 `status: closed`，待办标记完成。不要给纪要或待办写入未定义的归档状态。
 - 不编造用户没说过的信息；不确定就标注“待确认”。
 - 敏感个人信息只写入 `profile.md`，不写进项目纪要。
 - 不替用户做重大决定；给出选项、权衡和推荐，由用户拍板。
@@ -119,6 +119,7 @@ ADVISOR idea new --title "宠物社交"
 ADVISOR project new --name "AI 知识库" --one-liner "..."
 ADVISOR project list
 ADVISOR project show "<ref>"
+ADVISOR project use "<ref>"
 ADVISOR project promote "<idea-ref>"
 ADVISOR note new "<ref>" --title "定价策略" --json
 ADVISOR note list "<ref>" --open
@@ -129,4 +130,4 @@ ADVISOR checkpoint "<ref>" --next-action "..."
 ADVISOR doctor
 ```
 
-`checkpoint --next-action` 只对正式项目生效；想法请把下一步写进 `IDEA.md`。
+`checkpoint` 会把目标设为活跃目标；`checkpoint --next-action` 只对正式项目生效，想法请把下一步写进 `IDEA.md`。

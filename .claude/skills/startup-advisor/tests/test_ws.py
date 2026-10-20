@@ -92,3 +92,18 @@ class WorkspaceInitTests(helpers.WorkspaceTestCase):
         self.ws.state_file.write_bytes(b"\xff\xfe")
         with self.assertRaises(ws.AdvisorError):
             self.ws.load_state()
+
+    def test_read_text_rejects_invalid_utf8(self):
+        path = self.ws.ventures / "bad.md"
+        path.write_bytes(b"\xff\xfe")
+        with self.assertRaises(ws.AdvisorError) as ctx:
+            ws.read_text(path)
+        self.assertIn("doctor", str(ctx.exception))
+
+    def test_read_text_accepts_bom(self):
+        path = self.ws.ventures / "bom.md"
+        content = "---\nname: 测试\n---\n"
+        path.write_bytes(b"\xef\xbb\xbf" + content.encode("utf-8"))
+        text = ws.read_text(path)
+        self.assertFalse(text.startswith("﻿"))
+        self.assertEqual(text, content)

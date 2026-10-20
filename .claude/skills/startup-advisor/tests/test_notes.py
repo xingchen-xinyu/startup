@@ -86,6 +86,12 @@ class NoteTests(helpers.WorkspaceTestCase):
         with self.assertRaises(ws.AdvisorError):
             notes.find_note(self.ws, "")
 
+    def test_find_note_rejects_empty_fragment(self):
+        notes.create_note(self.ws, self.target, "讨论")
+        with self.assertRaises(ws.AdvisorError) as ctx:
+            notes.find_note(self.ws, ".")
+        self.assertIn("有效", str(ctx.exception))
+
     def test_add_decision_flattens_fields(self):
         path = notes.add_decision(
             self.target,
@@ -141,6 +147,23 @@ class ResumeTests(helpers.WorkspaceTestCase):
         self.assertEqual(len(data["open_discussions"]), 2)
         self.assertEqual(data["open_discussion_total"], 4)
 
+    def test_resume_negative_limit_returns_no_discussions(self):
+        target = entities.create_project(self.ws, "测试")
+        notes.create_note(self.ws, target, "讨论")
+        data = notes.collect_resume(self.ws, limit=-1)
+        self.assertEqual(data["open_discussions"], [])
+        self.assertEqual(data["open_discussion_total"], 1)
+
+    def test_resume_reads_next_step_from_body(self):
+        target = entities.create_project(self.ws, "测试")
+        path = notes.create_note(self.ws, target, "讨论")
+        text = path.read_text(encoding="utf-8").replace(
+            "## 下一步\n", "## 下一步\n- 访谈 5 位用户\n"
+        )
+        path.write_text(text, encoding="utf-8")
+        data = notes.collect_resume(self.ws)
+        self.assertEqual(data["open_discussions"][0]["next_step"], "访谈 5 位用户")
+
     def test_checkpoint_updates_next_action_and_returns_summary(self):
         target = entities.create_project(self.ws, "测试")
         notes.create_note(self.ws, target, "讨论")
@@ -157,3 +180,27 @@ class ResumeTests(helpers.WorkspaceTestCase):
         idea = entities.create_idea(self.ws, "宠物社交")
         summary = notes.checkpoint(self.ws, idea)
         self.assertEqual(summary["target_rel"], idea["rel"])
+
+    def test_checkpoint_sets_active(self):
+        first = entities.create_project(self.ws, "项目甲")
+        second = entities.create_project(self.ws, "项目乙")
+        self.ws.set_active(second["rel"])
+        self.assertEqual(self.ws.active(), second["rel"])
+        notes.checkpoint(self.ws, first)
+        self.assertEqual(self.ws.active(), first["rel"])
+
+    def test_checkpoint_finds_older_open_note(self):
+        target = entities.create_project(self.ws, "测试")
+        old = notes.create_note(self.ws, target, "旧讨论")
+        text = old.read_text(encoding="utf-8").replace(
+            "## 未决问题\n", "## 未决问题\n- 旧问题仍然成立？\n"
+        )
+        text = ws.replace_frontmatter_field(text, "date", "2026-01-01")
+        old.write_text(text, encoding="utf-8")
+        for title in ("新讨论一", "新讨论二", "新讨论三"):
+            path = notes.create_note(self.ws, target, title)
+            notes.close_note(self.ws, str(path))
+
+        summary = notes.checkpoint(self.ws, target)
+
+        self.assertIn("旧问题仍然成立？", summary["open_questions"])

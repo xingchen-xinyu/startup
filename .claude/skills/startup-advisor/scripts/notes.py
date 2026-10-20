@@ -27,6 +27,10 @@ def _one_line(value) -> str:
 def _read_note(path: Path) -> dict:
     text = read_text(path)
     meta, body = split_frontmatter(text)
+    next_step = meta.get("next_step", "").strip()
+    if not next_step:
+        lines = section_lines(body, "下一步")
+        next_step = lines[0] if lines else ""
     return {
         "path": path,
         "meta": meta,
@@ -34,7 +38,7 @@ def _read_note(path: Path) -> dict:
         "title": meta.get("title", path.stem),
         "date": meta.get("date", ""),
         "status": meta.get("status", "open"),
-        "next_step": meta.get("next_step", ""),
+        "next_step": next_step,
         "open_questions": section_lines(body, "未决问题"),
     }
 
@@ -95,6 +99,8 @@ def find_note(ws: Workspace, ref: str) -> Path:
         return resolved
 
     needle = Path(ref).name.lower()
+    if not needle:
+        raise AdvisorError("请提供有效的讨论纪要引用。")
     matches = [
         path for path in ws.ventures.rglob("*.md")
         if path.parent.name == "discussions" and needle in path.name.lower()
@@ -157,6 +163,7 @@ def add_decision(
 
 
 def collect_resume(ws: Workspace, limit: int = 3) -> dict:
+    limit = max(0, limit)
     targets = iter_targets(ws)
     open_discussions: list[dict] = []
     open_todos: list[dict] = []
@@ -211,9 +218,10 @@ def checkpoint(ws: Workspace, target: dict, next_action: str | None = None) -> d
     touch_target(target, updates or None)
 
     recent = list_notes(target, limit=3)
-    latest_open = next((note for note in recent if note["status"] == "open"), None)
+    open_notes = list_notes(target, open_only=True, limit=1)
+    latest_open = open_notes[0] if open_notes else None
     open_items = list_todos(target, open_only=True)
-    return {
+    summary = {
         "target_rel": target["rel"],
         "target_label": target_label(target),
         "next_action": target["meta"].get("next_action", ""),
@@ -229,3 +237,5 @@ def checkpoint(ws: Workspace, target: dict, next_action: str | None = None) -> d
         ],
         "open_questions": latest_open["open_questions"] if latest_open else [],
     }
+    ws.set_active(target["rel"])
+    return summary

@@ -56,6 +56,21 @@ class EntityTests(helpers.WorkspaceTestCase):
         with self.assertRaises(ws.AdvisorError):
             entities.update_target(target, stage="unknown")
 
+    def test_update_project_rejects_title(self):
+        target = entities.create_project(self.ws, "测试")
+        with self.assertRaises(ws.AdvisorError):
+            entities.update_target(target, title="新标题")
+
+    def test_update_idea_rejects_name(self):
+        target = entities.create_idea(self.ws, "测试")
+        with self.assertRaises(ws.AdvisorError):
+            entities.update_target(target, name="新名称")
+
+    def test_update_project_rejects_blank_name(self):
+        target = entities.create_project(self.ws, "测试")
+        with self.assertRaises(ws.AdvisorError):
+            entities.update_target(target, name="   ")
+
     def test_update_project_syncs_body_heading_and_one_liner(self):
         target = entities.create_project(self.ws, "旧名字", "旧的一句话")
         updated = entities.update_target(target, name="新名字", one_liner="新的一句话")
@@ -169,3 +184,9 @@ class PromoteTests(helpers.WorkspaceTestCase):
         h1_lines = [line for line in text.splitlines() if line.startswith("# ")]
         self.assertEqual(h1_lines, ["# 项目：新项目 ## 伪造标题"])
         self.assertNotIn("\n## 伪造标题", text)
+
+    def test_promote_falls_back_when_new_name_is_blank(self):
+        entities.create_idea(self.ws, "宠物社交")
+        project = entities.promote_idea(self.ws, "宠物社交", new_name="   ")
+        self.assertEqual(project["meta"]["name"], "宠物社交")
+        self.assertEqual(project["rel"], "宠物社交")

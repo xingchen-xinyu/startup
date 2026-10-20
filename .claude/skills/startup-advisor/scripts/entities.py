@@ -164,11 +164,21 @@ def create_idea(ws: Workspace, title: str, one_liner: str = "") -> dict:
 
 
 def update_target(target: dict, **changes: str | None) -> dict:
-    allowed = {"name", "title", "stage", "one_liner", "next_action"}
+    allowed = {
+        "project": {"name", "stage", "one_liner", "next_action"},
+        "idea": {"title", "one_liner"},
+    }.get(target["kind"], set())
     updates = {key: value for key, value in changes.items() if value is not None}
     unknown = set(updates) - allowed
     if unknown:
         raise AdvisorError(f"不支持的更新字段：{', '.join(sorted(unknown))}")
+    for key in ("name", "title", "one_liner"):
+        if key in updates:
+            updates[key] = " ".join(str(updates[key]).split())
+    if "name" in updates and not updates["name"]:
+        raise AdvisorError("项目名称不能为空。")
+    if "title" in updates and not updates["title"]:
+        raise AdvisorError("想法标题不能为空。")
     if "stage" in updates and updates["stage"] not in STAGES:
         raise AdvisorError(f"未知阶段：{updates['stage']}")
     return touch_target(target, updates)
@@ -202,7 +212,9 @@ def promote_idea(ws: Workspace, ref: str, new_name: str | None = None) -> dict:
     if idea["kind"] != "idea":
         raise AdvisorError("只能把临时想法转为正式项目。")
 
-    title = " ".join((new_name or target_label(idea)).split())
+    title = " ".join((new_name or "").split())
+    if not title:
+        title = " ".join(str(target_label(idea)).split())
     slug = sanitize_name(title) or f"project-{now():%Y%m%d-%H%M}"
     dest = unique_dir(ws.ventures, slug)
 

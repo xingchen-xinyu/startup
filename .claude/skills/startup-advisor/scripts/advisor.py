@@ -60,7 +60,12 @@ def _render_resume(data: dict) -> str:
         if remaining > 0:
             lines.append(f"…还有 {remaining} 条未结束讨论。")
     else:
-        lines.append("还没有未结束的讨论。可以开一个新话题，或先聊聊一个想法。")
+        if data["open_discussion_total"] > 0:
+            lines.append(
+                f"有 {data['open_discussion_total']} 条未结束讨论，本次未展示。"
+            )
+        else:
+            lines.append("还没有未结束的讨论。可以开一个新话题，或先聊聊一个想法。")
     if data["open_todo_count"]:
         lines.append(f"\n另有 {data['open_todo_count']} 个进行中的待办。")
     if data["active"]:

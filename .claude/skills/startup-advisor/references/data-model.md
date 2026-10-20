@@ -8,7 +8,7 @@
 - `ventures/.state.json`：`{"version": 1, "active": "<相对路径>", "updated": "<ISO 时间>"}`。
 - `ventures/_inbox/<想法>/IDEA.md`：未立项想法。
 - `ventures/<项目>/PROJECT.md`：正式项目主档。
-- 每个目标的 `discussions/`、`todos.md`、`decisions.md`、`assets/`。
+- 每个目标的 `discussions/`；`assets/` 用于存放专项方案，按需创建。
 
 `todos.md` 和 `decisions.md` 不在创建项目时生成，而是在第一次写入待办或决策时创建。读取时文件不存在是正常状态，不要当成数据损坏。
 
@@ -22,7 +22,7 @@
 
 `title`、`created`、`updated`、`status`。
 
-`status`：`incubating` / `promoted` / `archived`。
+`status`：`incubating` / `archived`。转正时会复制内容并删除源 `IDEA.md`，因此不保留 `promoted` 状态。
 
 ## 转正迁移
 
@@ -43,6 +43,7 @@ frontmatter：`title`、`date`、`target`、`status`、`next_step`。
 
 - `target` 是相对 `ventures/` 的路径，例如 `AI-知识库` 或 `_inbox/宠物社交`。
 - `status: open` 表示下次启动需要续接；`closed` 表示讨论结束。
+- `next_step` 为空时，`resume` 会回退读取正文 `## 下一步` 节的第一条。
 
 ## 待办
 

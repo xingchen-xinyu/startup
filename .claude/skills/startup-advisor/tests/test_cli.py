@@ -131,6 +131,42 @@ class CliTests(unittest.TestCase):
         self.assertIn("status: closed", Path(first_data["path"]).read_text(encoding="utf-8"))
         self.assertIn("status: open", Path(second_data["path"]).read_text(encoding="utf-8"))
 
+    def test_project_use_updates_active(self):
+        first = run_cli(self.root, "project", "new", "--name", "项目甲", "--json")
+        self.assertEqual(first.returncode, 0, first.stderr)
+        first_rel = json.loads(first.stdout)["rel"]
+        run_cli(self.root, "project", "new", "--name", "项目乙")
+
+        used = run_cli(self.root, "project", "use", "项目甲")
+        self.assertEqual(used.returncode, 0, used.stderr)
+        resume = run_cli(self.root, "resume", "--json")
+        self.assertEqual(resume.returncode, 0, resume.stderr)
+        self.assertEqual(json.loads(resume.stdout)["active"], first_rel)
+
+    def test_checkpoint_updates_active(self):
+        first = run_cli(self.root, "project", "new", "--name", "项目甲", "--json")
+        self.assertEqual(first.returncode, 0, first.stderr)
+        first_rel = json.loads(first.stdout)["rel"]
+        run_cli(self.root, "project", "new", "--name", "项目乙")
+
+        checkpoint = run_cli(self.root, "checkpoint", "项目甲", "--json")
+        self.assertEqual(checkpoint.returncode, 0, checkpoint.stderr)
+        resume = run_cli(self.root, "resume", "--json")
+        self.assertEqual(resume.returncode, 0, resume.stderr)
+        self.assertEqual(json.loads(resume.stdout)["active"], first_rel)
+
+    def test_resume_bad_note_exits_cleanly(self):
+        run_cli(self.root, "project", "new", "--name", "项目甲")
+        note = run_cli(self.root, "note", "new", "项目甲", "--title", "复盘", "--json")
+        self.assertEqual(note.returncode, 0, note.stderr)
+        Path(json.loads(note.stdout)["path"]).write_bytes(b"\xff\xfe")
+
+        result = run_cli(self.root, "resume")
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("doctor", result.stderr)
+        self.assertNotIn("Traceback", result.stderr + result.stdout)
+
     def test_todo_source_accepts_note_rel(self):
         run_cli(self.root, "project", "new", "--name", "AI 知识库")
         note = run_cli(self.root, "note", "new", "AI 知识库", "--title", "定价策略", "--json")

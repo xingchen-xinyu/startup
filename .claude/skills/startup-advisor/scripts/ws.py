@@ -43,7 +43,7 @@ def today() -> str:
 
 
 def now_iso() -> str:
-    return now().strftime("%Y-%m-%dT%H:%M:%S%z")
+    return now().isoformat(timespec="seconds")
 
 
 def sanitize_name(name: str, max_len: int = 48) -> str:
@@ -78,7 +78,12 @@ def unique_file(parent: Path, base: str, suffix: str = ".md") -> Path:
 
 
 def read_text(path: Path) -> str:
-    return path.read_text(encoding="utf-8")
+    try:
+        return path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise AdvisorError(
+            f"无法读取文件（编码或权限问题）：{path}。请运行 ADVISOR doctor 检查。"
+        ) from exc
 
 
 def write_text_atomic(path: Path, content: str) -> None:
