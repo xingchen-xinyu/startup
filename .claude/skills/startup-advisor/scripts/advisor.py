@@ -14,6 +14,22 @@ import notes
 import todos
 from ws import AdvisorError, UsageError, Workspace
 
+READ_ONLY_COMMANDS = {"resume", "status", "doctor"}
+READ_ONLY_SUBCOMMANDS = {
+    ("idea", "list"),
+    ("project", "list"),
+    ("project", "show"),
+    ("note", "list"),
+    ("todo", "list"),
+}
+
+
+def _is_read_only(args) -> bool:
+    if args.command in READ_ONLY_COMMANDS:
+        return True
+    sub = getattr(args, f"{args.command}_cmd", None)
+    return (args.command, sub) in READ_ONLY_SUBCOMMANDS
+
 
 def _print_json(value) -> None:
     print(json.dumps(value, ensure_ascii=False, indent=2))
@@ -201,7 +217,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         ws = Workspace(args.root)
-        created = ws.init()
+        created = [] if _is_read_only(args) else ws.init()
 
         if args.command == "init":
             if created:
@@ -337,6 +353,7 @@ def main(argv: list[str] | None = None) -> int:
                 data = {
                     "path": str(path),
                     "rel": f"{target['rel']}/discussions/{path.name}",
+                    "source": f"discussions/{path.name}",
                 }
                 if args.json:
                     _print_json(data)
@@ -386,7 +403,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "todo":
             target = entities.find_target(ws, args.ref)
             if args.todo_cmd == "add":
-                todo_id = todos.add_todo(target, args.text, args.priority, args.due, args.source)
+                source = args.source
+                prefix = f"{target['rel']}/"
+                if source.startswith(prefix):
+                    source = source[len(prefix):]
+                todo_id = todos.add_todo(target, args.text, args.priority, args.due, source)
                 if args.json:
                     _print_json({"id": todo_id})
                 else:

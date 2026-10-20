@@ -82,10 +82,13 @@ def find_note(ws: Workspace, ref: str) -> Path:
     if not ref:
         raise AdvisorError("请提供讨论纪要路径或关键字。")
     candidate = Path(ref)
-    if not candidate.is_absolute():
-        candidate = ws.root / candidate
-    resolved = candidate.resolve()
     ventures = ws.ventures.resolve()
+    if candidate.is_absolute():
+        resolved = candidate.resolve()
+    else:
+        root_resolved = (ws.root / candidate).resolve()
+        ventures_resolved = (ws.ventures / candidate).resolve()
+        resolved = root_resolved if root_resolved.exists() else ventures_resolved
     if resolved.is_file() and resolved.is_relative_to(ventures):
         if resolved.parent.name != "discussions" or resolved.suffix.lower() != ".md":
             raise AdvisorError(f"不是讨论纪要：{ref}")

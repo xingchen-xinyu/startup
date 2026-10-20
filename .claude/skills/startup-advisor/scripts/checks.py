@@ -155,6 +155,8 @@ def run_doctor(ws: Workspace) -> list[dict]:
             if item["source"]:
                 source = target["path"] / item["source"]
                 if not source.exists():
+                    source = ws.ventures / item["source"]
+                if not source.exists():
                     issues.append({
                         "level": "warning",
                         "message": f"待办 {item['id']} 的来源不存在：{item['source']}",
