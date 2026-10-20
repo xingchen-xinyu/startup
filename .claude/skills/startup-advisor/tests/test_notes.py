@@ -104,3 +104,56 @@ class NoteTests(helpers.WorkspaceTestCase):
     def test_list_notes_negative_limit_returns_empty(self):
         notes.create_note(self.ws, self.target, "限制")
         self.assertEqual(notes.list_notes(self.target, limit=-1), [])
+
+
+class ResumeTests(helpers.WorkspaceTestCase):
+    def test_resume_collects_open_discussions_and_todos(self):
+        target = entities.create_project(self.ws, "AI 知识库")
+        path = notes.create_note(self.ws, target, "定价策略", "访谈 3 家")
+        text = path.read_text(encoding="utf-8").replace(
+            "## 未决问题\n", "## 未决问题\n- 企业版定价锚点？\n"
+        )
+        path.write_text(text, encoding="utf-8")
+        from todos import add_todo
+        add_todo(target, "访谈 3 家团队", "P1")
+
+        data = notes.collect_resume(self.ws)
+
+        self.assertEqual(data["open_discussion_total"], 1)
+        discussion = data["open_discussions"][0]
+        self.assertEqual(discussion["title"], "定价策略")
+        self.assertEqual(discussion["open_questions"], ["企业版定价锚点？"])
+        self.assertEqual(data["open_todo_count"], 1)
+        self.assertEqual(data["open_todos"][0]["text"], "访谈 3 家团队")
+
+    def test_resume_ignores_closed_notes(self):
+        target = entities.create_project(self.ws, "测试")
+        path = notes.create_note(self.ws, target, "已完成讨论")
+        notes.close_note(self.ws, str(path))
+        data = notes.collect_resume(self.ws)
+        self.assertEqual(data["open_discussion_total"], 0)
+
+    def test_resume_limit_keeps_total(self):
+        target = entities.create_project(self.ws, "测试")
+        for title in ("一", "二", "三", "四"):
+            notes.create_note(self.ws, target, title)
+        data = notes.collect_resume(self.ws, limit=2)
+        self.assertEqual(len(data["open_discussions"]), 2)
+        self.assertEqual(data["open_discussion_total"], 4)
+
+    def test_checkpoint_updates_next_action_and_returns_summary(self):
+        target = entities.create_project(self.ws, "测试")
+        notes.create_note(self.ws, target, "讨论")
+        from todos import add_todo
+        add_todo(target, "下一步行动")
+        summary = notes.checkpoint(self.ws, target, "访谈 3 家团队")
+        self.assertEqual(summary["next_action"], "访谈 3 家团队")
+        self.assertEqual(len(summary["open_todos"]), 1)
+        self.assertTrue(summary["recent_notes"])
+        text = (target["path"] / "PROJECT.md").read_text(encoding="utf-8")
+        self.assertIn("next_action: 访谈 3 家团队", text)
+
+    def test_checkpoint_for_idea_does_not_require_next_action(self):
+        idea = entities.create_idea(self.ws, "宠物社交")
+        summary = notes.checkpoint(self.ws, idea)
+        self.assertEqual(summary["target_rel"], idea["rel"])

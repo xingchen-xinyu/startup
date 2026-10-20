@@ -151,3 +151,78 @@ def add_decision(
     write_text_atomic(path, text.rstrip() + "\n\n" + "\n".join(lines) + "\n")
     touch_target(target)
     return path
+
+
+def collect_resume(ws: Workspace, limit: int = 3) -> dict:
+    targets = iter_targets(ws)
+    open_discussions: list[dict] = []
+    open_todos: list[dict] = []
+
+    for target in targets:
+        for note in list_notes(target, open_only=True):
+            open_discussions.append({
+                "target_kind": target["kind"],
+                "target_rel": target["rel"],
+                "target_label": target_label(target),
+                "title": note["title"],
+                "date": note["date"],
+                "note_path": f"{target['rel']}/discussions/{note['path'].name}",
+                "next_step": note["next_step"],
+                "open_questions": note["open_questions"],
+            })
+        for todo in list_todos(target, open_only=True):
+            open_todos.append({
+                "target_rel": target["rel"],
+                "target_label": target_label(target),
+                "id": todo["id"],
+                "text": todo["text"],
+                "priority": todo["priority"],
+                "due": todo["due"],
+            })
+
+    open_discussions.sort(key=lambda item: item["date"], reverse=True)
+    return {
+        "active": ws.active(),
+        "profile_path": "ventures/profile.md" if ws.has_profile() else "",
+        "open_discussions": open_discussions[:limit],
+        "open_discussion_total": len(open_discussions),
+        "open_todo_count": len(open_todos),
+        "open_todos": open_todos,
+        "targets": [
+            {
+                "kind": target["kind"],
+                "rel": target["rel"],
+                "label": target_label(target),
+                "stage": target["meta"].get("stage", ""),
+                "next_action": target["meta"].get("next_action", ""),
+            }
+            for target in targets
+        ],
+    }
+
+
+def checkpoint(ws: Workspace, target: dict, next_action: str | None = None) -> dict:
+    updates: dict[str, str] = {}
+    if next_action is not None and target["kind"] == "project":
+        updates["next_action"] = next_action
+    touch_target(target, updates or None)
+
+    recent = list_notes(target, limit=3)
+    latest_open = next((note for note in recent if note["status"] == "open"), None)
+    open_items = list_todos(target, open_only=True)
+    return {
+        "target_rel": target["rel"],
+        "target_label": target_label(target),
+        "next_action": target["meta"].get("next_action", ""),
+        "open_todos": open_items,
+        "recent_notes": [
+            {
+                "title": note["title"],
+                "date": note["date"],
+                "status": note["status"],
+                "path": f"{target['rel']}/discussions/{note['path'].name}",
+            }
+            for note in recent
+        ],
+        "open_questions": latest_open["open_questions"] if latest_open else [],
+    }
