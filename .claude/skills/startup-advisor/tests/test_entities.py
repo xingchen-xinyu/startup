@@ -49,6 +49,33 @@ class EntityTests(helpers.WorkspaceTestCase):
         with self.assertRaises(ws.AdvisorError):
             entities.update_target(target, stage="unknown")
 
+    def test_update_project_syncs_body_heading_and_one_liner(self):
+        target = entities.create_project(self.ws, "旧名字", "旧的一句话")
+        updated = entities.update_target(target, name="新名字", one_liner="新的一句话")
+        text = (updated["path"] / "PROJECT.md").read_text(encoding="utf-8")
+        self.assertIn("# 项目：新名字", text)
+        self.assertNotIn("# 项目：旧名字", text)
+        self.assertEqual(ws.section_lines(updated["body"], "一句话"), ["新的一句话"])
+        self.assertEqual(updated["meta"]["name"], "新名字")
+        self.assertEqual(updated["meta"]["one_liner"], "新的一句话")
+
+    def test_update_idea_syncs_title_and_one_liner(self):
+        target = entities.create_idea(self.ws, "旧标题", "旧的说明")
+        updated = entities.update_target(target, title="新标题", one_liner="新的说明")
+        text = (updated["path"] / "IDEA.md").read_text(encoding="utf-8")
+        self.assertIn("# 想法：新标题", text)
+        self.assertNotIn("# 想法：旧标题", text)
+        self.assertEqual(ws.section_lines(updated["body"], "一句话"), ["新的说明"])
+        self.assertEqual(entities.idea_one_liner(updated), "新的说明")
+        self.assertEqual(updated["meta"]["title"], "新标题")
+
+    def test_reserved_name_project_is_reachable(self):
+        target = entities.create_project(self.ws, "CON")
+        self.assertEqual(target["rel"], "_CON")
+        rels = [item["rel"] for item in entities.iter_targets(self.ws)]
+        self.assertIn("_CON", rels)
+        self.assertEqual(entities.find_target(self.ws, "_CON")["rel"], "_CON")
+
     def test_iter_targets_includes_projects_and_ideas(self):
         first = entities.create_project(self.ws, "第一个")
         second = entities.create_idea(self.ws, "第二个")

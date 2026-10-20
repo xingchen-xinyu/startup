@@ -42,7 +42,7 @@ def iter_targets(ws: Workspace) -> list[dict]:
     targets: list[dict] = []
     if ws.ventures.is_dir():
         for path in sorted(ws.ventures.iterdir()):
-            if path.is_dir() and not path.name.startswith("_") and (path / "PROJECT.md").exists():
+            if path.is_dir() and (path / "PROJECT.md").exists():
                 targets.append(load_target(ws, path, "project"))
     if ws.inbox.is_dir():
         for path in sorted(ws.inbox.iterdir()):
@@ -86,11 +86,37 @@ def find_target(ws: Workspace, ref: str) -> dict:
     return matches[0]
 
 
+def _replace_heading(body: str, keyword: str, value: str) -> str:
+    pattern = re.compile(rf"^#\s*{re.escape(keyword)}\s*[:：].*$", re.M)
+    return pattern.sub(lambda match: f"# {keyword}：{value}", body, count=1)
+
+
+def _replace_section(body: str, heading: str, value: str) -> str:
+    pattern = re.compile(
+        rf"^(##\s*{re.escape(heading)}\s*)$(.*?)(?=^##\s|\Z)",
+        re.M | re.S,
+    )
+    updated, count = pattern.subn(
+        lambda match: f"{match.group(1)}\n\n{value}\n\n", body, count=1,
+    )
+    if count == 0:
+        updated = body.rstrip() + f"\n\n## {heading}\n\n{value}\n"
+    return updated
+
+
 def touch_target(target: dict, updates: dict[str, str] | None = None) -> dict:
     meta, body = split_frontmatter(read_text(target["main"]))
+    normalized: dict[str, str] = {}
     if updates:
-        meta.update({key: str(value) for key, value in updates.items()})
+        normalized = {key: str(value) for key, value in updates.items()}
+        meta.update(normalized)
     meta["updated"] = today()
+    if target["kind"] == "project" and "name" in normalized:
+        body = _replace_heading(body, "项目", normalized["name"])
+    elif target["kind"] == "idea" and "title" in normalized:
+        body = _replace_heading(body, "想法", normalized["title"])
+    if "one_liner" in normalized:
+        body = _replace_section(body, "一句话", normalized["one_liner"])
     write_text_atomic(target["main"], render_frontmatter(meta) + body)
     target["meta"] = meta
     target["body"] = body
