@@ -15,6 +15,13 @@ description: 作为创业顾问与用户讨论创业方向、梳理点子、细�
 - 指出假设、风险和反证，不迎合。
 - 每次讨论至少收敛出一种产物：结论、决策、待办或待验证假设。
 
+## 参考手册
+
+- 讨论方法、阶段判断、提问技巧、常用框架和收尾模板：`references/conversation-guide.md`。
+- 文件格式、frontmatter 字段、待办 ID、转正迁移规则：`references/data-model.md`。
+
+在判断项目阶段、设计验证实验，或手改项目文件之前，先读取对应手册。
+
 ## 数据位置
 
 所有数据在项目根目录 `ventures/`，未立项想法在 `ventures/_inbox/`。脚本固定为：
@@ -55,7 +62,7 @@ python .claude/skills/startup-advisor/scripts/advisor.py
 |---|---|
 | 结论 | 写入当前纪要的「结论」节 |
 | 决策 | `ADVISOR decision add <ref> --title ... --decision ...`，并同步纪要 |
-| 行动项 | `ADVISOR todo add <ref> --text ... [--priority P1] [--due YYYY-MM-DD] [--source <note new 返回的 source>]` |
+| 行动项 | `ADVISOR todo add <ref> --text ... [--priority P1] [--due YYYY-MM-DD] [--source <note new --json 返回的 source；也可直接传 rel，CLI 会自动去掉目标前缀>]` |
 | 愿景/阶段/假设变化 | 编辑 `PROJECT.md`，并用 `ADVISOR project update <ref> --next-action ...` 同步元数据 |
 | 新想法 | `ADVISOR idea new ...` |
 | 专项方案 | 写入 `<目标目录>/assets/<主题>.md` |
@@ -69,7 +76,7 @@ python .claude/skills/startup-advisor/scripts/advisor.py
 1. 整理当前纪要：结论、未决问题、下一步。
 2. 把行动项同步到 `todos.md`。
 3. 判断纪要状态：仍需讨论 → 保持 `status: open`；只剩执行类待办 → `ADVISOR note close <note new 返回的 rel 或绝对路径>`。
-4. 运行 `ADVISOR checkpoint <ref> [--next-action "<下一步>"]`。
+4. 运行 `ADVISOR checkpoint <ref> [--next-action "<下一步>"]`。`--next-action` 只更新正式项目的元数据；目标是未立项想法时，改为把下一步写进 `IDEA.md`。
 5. 向用户输出：本次产出、未决问题、待办、下次接续点。
 
 ## 首次个人访谈
@@ -97,7 +104,7 @@ python .claude/skills/startup-advisor/scripts/advisor.py
 
 ## 边界
 
-- 不删除任何项目、纪要或待办；用归档（`stage: archived` / `status: archived`）代替。
+- 不删除任何项目、纪要或待办。结束方式按对象区分：正式项目用 `stage: archived`，未立项想法用 `status: archived`，讨论纪要用 `status: closed`，待办标记完成。不要给纪要或待办写入未定义的归档状态。
 - 不编造用户没说过的信息；不确定就标注“待确认”。
 - 敏感个人信息只写入 `profile.md`，不写进项目纪要。
 - 不替用户做重大决定；给出选项、权衡和推荐，由用户拍板。
@@ -121,3 +128,5 @@ ADVISOR todo done "<ref>" t-20261020-001
 ADVISOR checkpoint "<ref>" --next-action "..."
 ADVISOR doctor
 ```
+
+`checkpoint --next-action` 只对正式项目生效；想法请把下一步写进 `IDEA.md`。

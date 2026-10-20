@@ -10,6 +10,8 @@
 - `ventures/<项目>/PROJECT.md`：正式项目主档。
 - 每个目标的 `discussions/`、`todos.md`、`decisions.md`、`assets/`。
 
+`todos.md` 和 `decisions.md` 不在创建项目时生成，而是在第一次写入待办或决策时创建。读取时文件不存在是正常状态，不要当成数据损坏。
+
 ## PROJECT.md frontmatter
 
 `name`、`stage`、`one_liner`、`created`、`updated`、`next_action`。
@@ -21,6 +23,17 @@
 `title`、`created`、`updated`、`status`。
 
 `status`：`incubating` / `promoted` / `archived`。
+
+## 转正迁移
+
+`ADVISOR project promote <idea-ref>` 将 `_inbox/<想法>/` 复制为新项目目录，并完成以下转换：
+
+- `IDEA.md` → `PROJECT.md`；想法的标题与一句话介绍映射为项目的 `name` 和 `one_liner`。
+- 原想法的正文保留在 `PROJECT.md` 的 `## 想法起源` 节。
+- `discussions/`、`assets/` 等历史内容原样保留；讨论纪要 frontmatter 的 `target` 更新为新项目目录（如 `_inbox/宠物社交` → `宠物社交`）。
+- 若缺少 `todos.md` / `decisions.md`，转正时初始化为空文件。
+- `ventures/.state.json` 的 `active` 指向新项目。
+- 源 `_inbox/<想法>/` 目录随后删除，历史内容已随复制保留。
 
 ## 讨论纪要
 

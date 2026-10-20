@@ -39,3 +39,11 @@ class SkillDocsTests(unittest.TestCase):
             "不删除",
         ]:
             self.assertIn(needle, text)
+
+    def test_skill_links_references(self):
+        text = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
+        for rel in [
+            "references/conversation-guide.md",
+            "references/data-model.md",
+        ]:
+            self.assertIn(rel, text, rel)
