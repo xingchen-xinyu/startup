@@ -20,6 +20,12 @@ class EntityTests(helpers.WorkspaceTestCase):
         text = (target["path"] / "IDEA.md").read_text(encoding="utf-8")
         self.assertIn("同城宠物主人社交", text)
 
+    def test_create_idea_flattens_multiline_one_liner(self):
+        target = entities.create_idea(self.ws, "注入测试", "第一行\n## 伪造标题\n第二行")
+        text = (target["path"] / "IDEA.md").read_text(encoding="utf-8")
+        self.assertIn("第一行 ## 伪造标题 第二行", text)
+        self.assertNotIn("\n## 伪造标题", text)
+
     def test_find_target_by_label_slug_and_rel(self):
         target = entities.create_project(self.ws, "AI 知识库")
         self.assertEqual(entities.find_target(self.ws, "AI-知识库")["rel"], target["rel"])

@@ -146,6 +146,7 @@ def create_project(ws: Workspace, name: str, one_liner: str = "", stage: str = "
 
 def create_idea(ws: Workspace, title: str, one_liner: str = "") -> dict:
     title = " ".join((title or "").split())
+    one_liner = " ".join((one_liner or "").split())
     slug = sanitize_name(title)
     if not slug:
         slug = f"idea-{now():%Y%m%d-%H%M}"
