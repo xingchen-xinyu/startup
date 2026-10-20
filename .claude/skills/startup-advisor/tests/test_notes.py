@@ -3,6 +3,7 @@ import unittest
 import helpers
 import entities
 import notes
+import ws
 
 
 class NoteTests(helpers.WorkspaceTestCase):
@@ -60,3 +61,46 @@ class NoteTests(helpers.WorkspaceTestCase):
         path = notes.create_note(self.ws, self.target, "定价策略")
         found = notes.find_note(self.ws, "定价策略")
         self.assertEqual(found, path)
+
+    def test_create_note_flattens_frontmatter_inputs(self):
+        path = notes.create_note(
+            self.ws,
+            self.target,
+            "标题\n---\ninjected: yes",
+            "下一步\n---\nstatus: closed",
+        )
+        text = path.read_text(encoding="utf-8")
+        meta, _ = ws.split_frontmatter(text)
+        self.assertEqual(meta["status"], "open")
+        self.assertNotIn("injected", meta)
+        self.assertNotIn("\n", meta["title"])
+        self.assertNotIn("\n", meta["next_step"])
+
+    def test_find_note_rejects_non_discussion_files(self):
+        project_md = self.target["path"] / "PROJECT.md"
+        with self.assertRaises(ws.AdvisorError):
+            notes.find_note(self.ws, str(project_md))
+        self.assertNotIn("status: closed", project_md.read_text(encoding="utf-8"))
+
+    def test_find_note_empty_ref_raises(self):
+        with self.assertRaises(ws.AdvisorError):
+            notes.find_note(self.ws, "")
+
+    def test_add_decision_flattens_fields(self):
+        path = notes.add_decision(
+            self.target,
+            "标题\n## 伪造",
+            "决定\n## 伪造",
+            options="备选\n## 伪造",
+            reason="理由\n## 伪造",
+            impact="影响\n## 伪造",
+            source="来源\n## 伪造",
+        )
+        text = path.read_text(encoding="utf-8")
+        self.assertNotIn("\n## 伪造", text)
+        self.assertIn("- **决定**：决定 ## 伪造", text)
+        self.assertIn("- **备选**：备选 ## 伪造", text)
+
+    def test_list_notes_negative_limit_returns_empty(self):
+        notes.create_note(self.ws, self.target, "限制")
+        self.assertEqual(notes.list_notes(self.target, limit=-1), [])
