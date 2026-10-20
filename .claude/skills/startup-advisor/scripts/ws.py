@@ -182,7 +182,11 @@ class Workspace:
         if not self.state_file.exists():
             return {"version": 1, "active": "", "updated": ""}
         try:
-            state = json.loads(read_text(self.state_file))
+            raw = read_text(self.state_file)
+        except (OSError, UnicodeDecodeError) as exc:
+            raise AdvisorError(f"状态文件无法读取：{self.state_file}") from exc
+        try:
+            state = json.loads(raw)
         except json.JSONDecodeError as exc:
             raise AdvisorError(f"状态文件格式损坏：{self.state_file}") from exc
         if not isinstance(state, dict):

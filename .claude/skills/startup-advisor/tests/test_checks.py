@@ -106,6 +106,31 @@ class DoctorTests(helpers.WorkspaceTestCase):
             for issue in issues
         ))
 
+    def test_non_utf8_state_is_reported_not_crash(self):
+        self.ws.state_file.write_bytes(b"\xff\xfe")
+        issues = checks.run_doctor(self.ws)
+        self.assertTrue(any(
+            issue["level"] == "error" and "状态" in issue["message"]
+            for issue in issues
+        ))
+
+    def test_non_utf8_project_main_does_not_crash(self):
+        target = entities.create_project(self.ws, "测试")
+        self.ws.set_active(target["rel"])
+        (target["path"] / "PROJECT.md").write_bytes(b"\xff\xfe")
+        issues = checks.run_doctor(self.ws)
+        self.assertIsInstance(issues, list)
+
+    def test_non_utf8_note_is_reported(self):
+        target = entities.create_project(self.ws, "测试")
+        note = notes.create_note(self.ws, target, "讨论")
+        note.write_bytes(b"\xff\xfe")
+        issues = checks.run_doctor(self.ws)
+        self.assertTrue(any(
+            issue["level"] == "error" and "纪要" in issue["message"]
+            for issue in issues
+        ))
+
     def test_doctor_does_not_create_todos_file(self):
         target = entities.create_project(self.ws, "测试")
         todos_path = target["path"] / "todos.md"

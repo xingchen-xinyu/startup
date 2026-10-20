@@ -87,3 +87,8 @@ class WorkspaceInitTests(helpers.WorkspaceTestCase):
         (self.ws.state_file).write_text("[]", encoding="utf-8")
         with self.assertRaises(ws.AdvisorError):
             self.ws.load_state()
+
+    def test_load_state_rejects_non_utf8(self):
+        self.ws.state_file.write_bytes(b"\xff\xfe")
+        with self.assertRaises(ws.AdvisorError):
+            self.ws.load_state()

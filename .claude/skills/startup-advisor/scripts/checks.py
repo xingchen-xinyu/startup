@@ -29,7 +29,7 @@ def run_doctor(ws: Workspace) -> list[dict]:
     else:
         try:
             state = ws.load_state()
-        except AdvisorError as exc:
+        except (AdvisorError, OSError, UnicodeDecodeError) as exc:
             issues.append({
                 "level": "error",
                 "message": str(exc),
@@ -41,7 +41,7 @@ def run_doctor(ws: Workspace) -> list[dict]:
         if active:
             try:
                 find_target(ws, active)
-            except AdvisorError as exc:
+            except (AdvisorError, OSError, UnicodeDecodeError) as exc:
                 issues.append({
                     "level": "warning",
                     "message": f"活跃目标已失效：{active}（{exc}）",
@@ -50,7 +50,16 @@ def run_doctor(ws: Workspace) -> list[dict]:
 
     inbox_resolved = ws.inbox.resolve()
     if ws.ventures.is_dir():
-        for path in ws.ventures.iterdir():
+        try:
+            venture_paths = list(ws.ventures.iterdir())
+        except OSError as exc:
+            issues.append({
+                "level": "error",
+                "message": f"无法读取项目目录：{exc}",
+                "path": "ventures",
+            })
+            venture_paths = []
+        for path in venture_paths:
             if (
                 path.is_dir()
                 and path.resolve() != inbox_resolved
@@ -62,7 +71,16 @@ def run_doctor(ws: Workspace) -> list[dict]:
                     "path": path.relative_to(ws.ventures).as_posix(),
                 })
     if ws.inbox.is_dir():
-        for path in ws.inbox.iterdir():
+        try:
+            inbox_paths = list(ws.inbox.iterdir())
+        except OSError as exc:
+            issues.append({
+                "level": "error",
+                "message": f"无法读取临时想法目录：{exc}",
+                "path": "ventures/_inbox",
+            })
+            inbox_paths = []
+        for path in inbox_paths:
             if path.is_dir() and not (path / "IDEA.md").exists():
                 issues.append({
                     "level": "error",
@@ -105,7 +123,16 @@ def run_doctor(ws: Workspace) -> list[dict]:
 
         discussions = target["path"] / "discussions"
         if discussions.is_dir():
-            for note in discussions.glob("*.md"):
+            try:
+                note_paths = sorted(discussions.glob("*.md"))
+            except OSError as exc:
+                issues.append({
+                    "level": "error",
+                    "message": f"无法读取纪要目录：{exc}",
+                    "path": f"{target['rel']}/discussions",
+                })
+                note_paths = []
+            for note in note_paths:
                 note_rel = f"{target['rel']}/discussions/{note.name}"
                 try:
                     meta, _ = split_frontmatter(read_text(note))
