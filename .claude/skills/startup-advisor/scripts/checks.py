@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 
 from entities import find_target, iter_targets
-from todos import list_todos
+from todos import parse_todos
 from ws import AdvisorError, Workspace, read_text, split_frontmatter
 
 
@@ -19,6 +19,7 @@ def run_doctor(ws: Workspace) -> list[dict]:
             "path": "ventures/profile.md",
         })
 
+    state = None
     if not ws.state_file.exists():
         issues.append({
             "level": "warning",
@@ -27,7 +28,7 @@ def run_doctor(ws: Workspace) -> list[dict]:
         })
     else:
         try:
-            ws.load_state()
+            state = ws.load_state()
         except AdvisorError as exc:
             issues.append({
                 "level": "error",
@@ -35,19 +36,26 @@ def run_doctor(ws: Workspace) -> list[dict]:
                 "path": "ventures/.state.json",
             })
 
-    if ws.active():
-        try:
-            find_target(ws, ws.active())
-        except AdvisorError:
-            issues.append({
-                "level": "warning",
-                "message": f"活跃目标已失效：{ws.active()}",
-                "path": "ventures/.state.json",
-            })
+    if state is not None:
+        active = str(state.get("active", "") or "")
+        if active:
+            try:
+                find_target(ws, active)
+            except AdvisorError as exc:
+                issues.append({
+                    "level": "warning",
+                    "message": f"活跃目标已失效：{active}（{exc}）",
+                    "path": "ventures/.state.json",
+                })
 
+    inbox_resolved = ws.inbox.resolve()
     if ws.ventures.is_dir():
         for path in ws.ventures.iterdir():
-            if path.is_dir() and path.name != "_inbox" and not (path / "PROJECT.md").exists():
+            if (
+                path.is_dir()
+                and path.resolve() != inbox_resolved
+                and not (path / "PROJECT.md").exists()
+            ):
                 issues.append({
                     "level": "error",
                     "message": "项目目录缺少 PROJECT.md",
@@ -62,8 +70,28 @@ def run_doctor(ws: Workspace) -> list[dict]:
                     "path": path.relative_to(ws.ventures).as_posix(),
                 })
 
-    for target in iter_targets(ws):
-        todo_items = list_todos(target)
+    try:
+        targets = iter_targets(ws)
+    except (OSError, UnicodeDecodeError, AdvisorError) as exc:
+        issues.append({
+            "level": "error",
+            "message": f"无法枚举项目与想法：{exc}",
+            "path": "ventures",
+        })
+        targets = []
+
+    for target in targets:
+        todos_path = target["path"] / "todos.md"
+        try:
+            todo_items = parse_todos(read_text(todos_path)) if todos_path.exists() else []
+        except (OSError, UnicodeDecodeError) as exc:
+            issues.append({
+                "level": "error",
+                "message": f"无法读取待办：{exc}",
+                "path": target["rel"],
+            })
+            todo_items = []
+
         duplicates = [
             todo_id for todo_id, count in Counter(item["id"] for item in todo_items).items()
             if count > 1
@@ -78,13 +106,22 @@ def run_doctor(ws: Workspace) -> list[dict]:
         discussions = target["path"] / "discussions"
         if discussions.is_dir():
             for note in discussions.glob("*.md"):
-                meta, _ = split_frontmatter(read_text(note))
+                note_rel = f"{target['rel']}/discussions/{note.name}"
+                try:
+                    meta, _ = split_frontmatter(read_text(note))
+                except (OSError, UnicodeDecodeError) as exc:
+                    issues.append({
+                        "level": "error",
+                        "message": f"无法读取纪要：{exc}",
+                        "path": note_rel,
+                    })
+                    continue
                 note_target = meta.get("target", "")
                 if note_target and note_target != target["rel"]:
                     issues.append({
                         "level": "warning",
                         "message": f"纪要 target 指向 {note_target}，与所在目录不一致",
-                        "path": f"{target['rel']}/discussions/{note.name}",
+                        "path": note_rel,
                     })
 
         for item in todo_items:

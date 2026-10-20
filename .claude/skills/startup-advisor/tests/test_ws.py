@@ -82,3 +82,8 @@ class WorkspaceInitTests(helpers.WorkspaceTestCase):
         ws.write_text_atomic(path, "第一版")
         ws.write_text_atomic(path, "第二版")
         self.assertEqual(path.read_text(encoding="utf-8"), "第二版")
+
+    def test_load_state_rejects_non_dict(self):
+        (self.ws.state_file).write_text("[]", encoding="utf-8")
+        with self.assertRaises(ws.AdvisorError):
+            self.ws.load_state()
