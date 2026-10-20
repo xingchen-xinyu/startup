@@ -403,7 +403,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "todo":
             target = entities.find_target(ws, args.ref)
             if args.todo_cmd == "add":
-                source = args.source
+                source = args.source.replace("\\", "/")
                 prefix = f"{target['rel']}/"
                 if source.startswith(prefix):
                     source = source[len(prefix):]

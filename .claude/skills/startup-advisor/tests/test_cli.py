@@ -98,6 +98,14 @@ class CliTests(unittest.TestCase):
         self.assertIn("缺少个人档案", result.stdout + result.stderr)
         self.assertFalse((self.root / "ventures").exists())
 
+    def test_project_show_is_read_only(self):
+        run_cli(self.root, "project", "new", "--name", "只读项目")
+        todos_path = self.root / "ventures" / "只读项目" / "todos.md"
+        self.assertFalse(todos_path.exists())
+        result = run_cli(self.root, "project", "show", "只读项目")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(todos_path.exists())
+
     def test_status_is_read_only(self):
         result = run_cli(self.root, "status")
         self.assertEqual(result.returncode, 0, result.stderr)

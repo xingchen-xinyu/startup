@@ -22,6 +22,12 @@ class TodoTests(helpers.WorkspaceTestCase):
         self.assertIn("📅 2026-10-27", text)
         self.assertIn("来源：discussions/a.md", text)
 
+    def test_list_todos_does_not_create_file(self):
+        path = self.target["path"] / "todos.md"
+        self.assertFalse(path.exists())
+        self.assertEqual(todos.list_todos(self.target), [])
+        self.assertFalse(path.exists())
+
     def test_list_open_only(self):
         first = todos.add_todo(self.target, "完成的事")
         todos.add_todo(self.target, "未完成的事")

@@ -73,6 +73,8 @@ def _load(target: dict) -> str:
 
 
 def list_todos(target: dict, open_only: bool = False) -> list[dict]:
+    if not _path(target).exists():
+        return []
     items = parse_todos(_load(target))
     if open_only:
         items = [item for item in items if not item["done"]]
