@@ -202,13 +202,13 @@ def promote_idea(ws: Workspace, ref: str, new_name: str | None = None) -> dict:
     if idea["kind"] != "idea":
         raise AdvisorError("只能把临时想法转为正式项目。")
 
-    title = (new_name or target_label(idea)).strip()
+    title = " ".join((new_name or target_label(idea)).split())
     slug = sanitize_name(title) or f"project-{now():%Y%m%d-%H%M}"
     dest = unique_dir(ws.ventures, slug)
 
     try:
         shutil.copytree(idea["path"], dest)
-        source_meta, source_body = split_frontmatter(read_text(dest / "IDEA.md"))
+        _, source_body = split_frontmatter(read_text(dest / "IDEA.md"))
         content = ws.render_template(
             "PROJECT.md", NAME=title, STAGE="idea",
             ONE_LINER=idea_one_liner({"body": source_body}),
@@ -236,10 +236,17 @@ def promote_idea(ws: Workspace, ref: str, new_name: str | None = None) -> dict:
 
         if not (dest / "PROJECT.md").exists():
             raise AdvisorError("转正校验失败：缺少 PROJECT.md")
-        shutil.rmtree(idea["path"])
     except BaseException:
         shutil.rmtree(dest, ignore_errors=True)
         raise
 
     ws.set_active(dest.name)
+    try:
+        shutil.rmtree(idea["path"])
+    except OSError as exc:
+        raise AdvisorError(
+            f"项目已创建于 {dest}，但源想法目录清理失败，请手动检查并清理源目录"
+            f"（{idea['path']}）。历史内容已保留。"
+        ) from exc
+
     return load_target(ws, dest, "project")

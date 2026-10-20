@@ -1,4 +1,5 @@
 import unittest
+from unittest import mock
 
 import helpers
 import entities
@@ -143,3 +144,28 @@ class PromoteTests(helpers.WorkspaceTestCase):
         entities.create_project(self.ws, "正式项目")
         with self.assertRaises(ws.AdvisorError):
             entities.promote_idea(self.ws, "正式项目")
+
+    def test_promote_rolls_back_destination_on_conversion_failure(self):
+        idea = entities.create_idea(self.ws, "宠物社交", "同城宠物主人社交")
+        with mock.patch.object(entities, "write_text_atomic", side_effect=RuntimeError("boom")):
+            with self.assertRaises(RuntimeError):
+                entities.promote_idea(self.ws, "宠物社交")
+        self.assertFalse((self.ws.ventures / "宠物社交").exists())
+        self.assertTrue(idea["path"].exists())
+
+    def test_promote_keeps_destination_when_source_cleanup_fails(self):
+        idea = entities.create_idea(self.ws, "宠物社交", "同城宠物主人社交")
+        with mock.patch.object(entities.shutil, "rmtree", side_effect=OSError("locked")):
+            with self.assertRaises(ws.AdvisorError) as ctx:
+                entities.promote_idea(self.ws, "宠物社交")
+        self.assertIn("清理", str(ctx.exception))
+        self.assertTrue((self.ws.ventures / "宠物社交" / "PROJECT.md").exists())
+        self.assertTrue(idea["path"].exists())
+
+    def test_promote_flattens_new_name(self):
+        entities.create_idea(self.ws, "宠物社交")
+        project = entities.promote_idea(self.ws, "宠物社交", new_name="新项目\n## 伪造标题")
+        text = (project["path"] / "PROJECT.md").read_text(encoding="utf-8")
+        h1_lines = [line for line in text.splitlines() if line.startswith("# ")]
+        self.assertEqual(h1_lines, ["# 项目：新项目 ## 伪造标题"])
+        self.assertNotIn("\n## 伪造标题", text)
