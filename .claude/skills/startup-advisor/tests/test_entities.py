@@ -55,6 +55,8 @@ class EntityTests(helpers.WorkspaceTestCase):
         text = (updated["path"] / "PROJECT.md").read_text(encoding="utf-8")
         self.assertIn("# 项目：新名字", text)
         self.assertNotIn("# 项目：旧名字", text)
+        self.assertIn("## 愿景", text)
+        self.assertNotIn("旧的一句话", text)
         self.assertEqual(ws.section_lines(updated["body"], "一句话"), ["新的一句话"])
         self.assertEqual(updated["meta"]["name"], "新名字")
         self.assertEqual(updated["meta"]["one_liner"], "新的一句话")
@@ -65,9 +67,27 @@ class EntityTests(helpers.WorkspaceTestCase):
         text = (updated["path"] / "IDEA.md").read_text(encoding="utf-8")
         self.assertIn("# 想法：新标题", text)
         self.assertNotIn("# 想法：旧标题", text)
+        self.assertIn("## 初步观察", text)
+        self.assertNotIn("旧的说明", text)
         self.assertEqual(ws.section_lines(updated["body"], "一句话"), ["新的说明"])
         self.assertEqual(entities.idea_one_liner(updated), "新的说明")
         self.assertEqual(updated["meta"]["title"], "新标题")
+
+    def test_repeated_update_does_not_grow_blank_lines(self):
+        target = entities.create_project(self.ws, "测试项目", "第一版")
+        target = entities.update_target(target, one_liner="第二版")
+        target = entities.update_target(target, one_liner="第三版")
+        text = (target["path"] / "PROJECT.md").read_text(encoding="utf-8")
+        self.assertIn("## 一句话\n\n第三版\n\n## 愿景", text)
+        self.assertNotIn("## 一句话\n\n\n", text)
+
+    def test_update_flattens_multiline_values(self):
+        target = entities.create_project(self.ws, "测试项目", "第一版")
+        target = entities.update_target(target, one_liner="第一行\n## 伪造标题\n第二行")
+        text = (target["path"] / "PROJECT.md").read_text(encoding="utf-8")
+        self.assertIn("第一行 ## 伪造标题 第二行", text)
+        self.assertNotIn("\n## 伪造标题", text)
+        self.assertEqual(target["meta"]["one_liner"], "第一行 ## 伪造标题 第二行")
 
     def test_reserved_name_project_is_reachable(self):
         target = entities.create_project(self.ws, "CON")

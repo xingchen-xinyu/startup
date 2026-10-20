@@ -93,7 +93,7 @@ def _replace_heading(body: str, keyword: str, value: str) -> str:
 
 def _replace_section(body: str, heading: str, value: str) -> str:
     pattern = re.compile(
-        rf"^(##\s*{re.escape(heading)}\s*)$(.*?)(?=^##\s|\Z)",
+        rf"^(##[ \t]*{re.escape(heading)}[ \t]*)$(.*?)(?=^##[ \t]|\Z)",
         re.M | re.S,
     )
     updated, count = pattern.subn(
@@ -109,6 +109,9 @@ def touch_target(target: dict, updates: dict[str, str] | None = None) -> dict:
     normalized: dict[str, str] = {}
     if updates:
         normalized = {key: str(value) for key, value in updates.items()}
+        for key in ("name", "title", "one_liner"):
+            if key in normalized:
+                normalized[key] = " ".join(normalized[key].split())
         meta.update(normalized)
     meta["updated"] = today()
     if target["kind"] == "project" and "name" in normalized:
