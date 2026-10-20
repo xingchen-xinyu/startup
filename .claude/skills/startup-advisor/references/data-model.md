@@ -8,9 +8,9 @@
 - `ventures/.state.json`：`{"version": 1, "active": "<相对路径>", "updated": "<ISO 时间>"}`。
 - `ventures/_inbox/<想法>/IDEA.md`：未立项想法。
 - `ventures/<项目>/PROJECT.md`：正式项目主档。
-- 每个目标的 `discussions/`；`assets/` 用于存放专项方案，按需创建。
+- 每个目标创建时生成 `discussions/` 与 `assets/`；`todos.md`/`decisions.md` 在首次写入时创建。
 
-`todos.md` 和 `decisions.md` 不在创建项目时生成，而是在第一次写入待办或决策时创建。读取时文件不存在是正常状态，不要当成数据损坏。
+`discussions/` 存放讨论纪要，`assets/` 用于存放专项方案。读取时 `todos.md`/`decisions.md` 不存在是正常状态，不要当成数据损坏。
 
 ## PROJECT.md frontmatter
 

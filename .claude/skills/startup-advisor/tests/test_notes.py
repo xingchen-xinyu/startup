@@ -180,6 +180,7 @@ class ResumeTests(helpers.WorkspaceTestCase):
         idea = entities.create_idea(self.ws, "宠物社交")
         summary = notes.checkpoint(self.ws, idea)
         self.assertEqual(summary["target_rel"], idea["rel"])
+        self.assertEqual(self.ws.active(), idea["rel"])
 
     def test_checkpoint_sets_active(self):
         first = entities.create_project(self.ws, "项目甲")
