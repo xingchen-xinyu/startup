@@ -108,3 +108,38 @@ class EntityTests(helpers.WorkspaceTestCase):
         rels = [t["rel"] for t in entities.iter_targets(self.ws)]
         self.assertIn(first["rel"], rels)
         self.assertIn(second["rel"], rels)
+
+
+class PromoteTests(helpers.WorkspaceTestCase):
+    def test_promote_moves_and_preserves_history(self):
+        idea = entities.create_idea(self.ws, "宠物社交", "同城宠物主人社交")
+        note = idea["path"] / "discussions" / "2026-10-20-需求.md"
+        note.write_text(
+            "---\ntitle: 需求\ndate: 2026-10-20\ntarget: _inbox/宠物社交\n"
+            "status: open\nnext_step: \n---\n\n# 讨论：需求\n\n## 未决问题\n- 需求真实吗？\n",
+            encoding="utf-8",
+        )
+
+        project = entities.promote_idea(self.ws, "宠物社交")
+
+        self.assertFalse(idea["path"].exists())
+        self.assertTrue((project["path"] / "PROJECT.md").exists())
+        self.assertTrue((project["path"] / "discussions" / note.name).exists())
+        meta, _ = ws.split_frontmatter(
+            (project["path"] / "discussions" / note.name).read_text(encoding="utf-8")
+        )
+        self.assertEqual(meta["target"], project["rel"])
+        project_text = (project["path"] / "PROJECT.md").read_text(encoding="utf-8")
+        self.assertIn("## 想法起源", project_text)
+        self.assertIn("同城宠物主人社交", project_text)
+        self.assertEqual(self.ws.active(), project["rel"])
+
+    def test_promote_extracts_one_liner(self):
+        entities.create_idea(self.ws, "宠物社交", "同城宠物主人社交")
+        project = entities.promote_idea(self.ws, "宠物社交")
+        self.assertEqual(project["meta"]["one_liner"], "同城宠物主人社交")
+
+    def test_promote_rejects_project(self):
+        entities.create_project(self.ws, "正式项目")
+        with self.assertRaises(ws.AdvisorError):
+            entities.promote_idea(self.ws, "正式项目")

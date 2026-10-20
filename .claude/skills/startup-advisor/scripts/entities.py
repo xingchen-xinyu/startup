@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 from pathlib import Path
 
 from ws import (
@@ -11,6 +12,7 @@ from ws import (
     now,
     read_text,
     render_frontmatter,
+    replace_frontmatter_field,
     sanitize_name,
     section_lines,
     split_frontmatter,
@@ -193,3 +195,51 @@ def append_idea_note_index(target: dict, title: str, date: str, note_rel: str) -
 def idea_one_liner(target: dict) -> str:
     lines = section_lines(target["body"], "一句话")
     return lines[0] if lines else ""
+
+
+def promote_idea(ws: Workspace, ref: str, new_name: str | None = None) -> dict:
+    idea = find_target(ws, ref)
+    if idea["kind"] != "idea":
+        raise AdvisorError("只能把临时想法转为正式项目。")
+
+    title = (new_name or target_label(idea)).strip()
+    slug = sanitize_name(title) or f"project-{now():%Y%m%d-%H%M}"
+    dest = unique_dir(ws.ventures, slug)
+
+    try:
+        shutil.copytree(idea["path"], dest)
+        source_meta, source_body = split_frontmatter(read_text(dest / "IDEA.md"))
+        content = ws.render_template(
+            "PROJECT.md", NAME=title, STAGE="idea",
+            ONE_LINER=idea_one_liner({"body": source_body}),
+            DATE=today(),
+        )
+        origin = re.sub(r"\A\s*#\s*想法：.*?\n", "", source_body, count=1).strip()
+        if origin:
+            content = content.rstrip() + "\n\n## 想法起源\n\n" + origin + "\n"
+        write_text_atomic(dest / "PROJECT.md", content)
+        (dest / "IDEA.md").unlink()
+
+        for filename, header in (
+            ("todos.md", "# 待办\n\n## 进行中\n\n## 已完成\n"),
+            ("decisions.md", "# 决策记录\n"),
+        ):
+            target_file = dest / filename
+            if not target_file.exists():
+                write_text_atomic(target_file, header)
+
+        discussions = dest / "discussions"
+        if discussions.is_dir():
+            for note in discussions.glob("*.md"):
+                text = read_text(note)
+                write_text_atomic(note, replace_frontmatter_field(text, "target", dest.name))
+
+        if not (dest / "PROJECT.md").exists():
+            raise AdvisorError("转正校验失败：缺少 PROJECT.md")
+        shutil.rmtree(idea["path"])
+    except BaseException:
+        shutil.rmtree(dest, ignore_errors=True)
+        raise
+
+    ws.set_active(dest.name)
+    return load_target(ws, dest, "project")
