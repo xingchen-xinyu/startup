@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from helpers import run_cli, write
+from helpers import advisor, run_cli, write
 
 
 class InitTests(unittest.TestCase):
@@ -48,3 +48,20 @@ class InitTests(unittest.TestCase):
             self.assertIn("称呼：星辰", new_profile.read_text(encoding="utf-8"))
             self.assertTrue(legacy.is_file())
             self.assertIn("migrated:", out)
+
+
+class ProfileBomTests(unittest.TestCase):
+    def test_bom_profile_parses_frontmatter_and_is_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "profile.md"
+            path.write_text(
+                "---\nupdated: 2026-10-26\n---\n\n## 基本信息\n- 称呼：\n",
+                encoding="utf-8-sig",
+                newline="\n",
+            )
+            text = advisor.read_text(path)
+            self.assertIsNotNone(text)
+            self.assertFalse(text.startswith(chr(0xFEFF)))
+            meta, _, _ = advisor.parse_frontmatter(text)
+            self.assertEqual(meta.get("updated"), "2026-10-26")
+            self.assertEqual(advisor.profile_state(path), "empty")

@@ -25,7 +25,7 @@ PLACEHOLDER_VALUES = {
 
 def read_text(path: Path) -> str | None:
     try:
-        return path.read_text(encoding="utf-8")
+        return path.read_text(encoding="utf-8-sig")
     except (OSError, UnicodeDecodeError):
         return None
 
