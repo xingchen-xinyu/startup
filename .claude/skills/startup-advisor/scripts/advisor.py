@@ -12,11 +12,6 @@ import tempfile
 from datetime import date
 from pathlib import Path
 
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8")
-if hasattr(sys.stderr, "reconfigure"):
-    sys.stderr.reconfigure(encoding="utf-8")
-
 PLACEHOLDER_VALUES = {
     "（待确认）",
     "(待确认)",
@@ -49,6 +44,17 @@ RESERVED_NAMES = (
     | {f"COM{i}" for i in range(1, 10)}
     | {f"LPT{i}" for i in range(1, 10)}
 )
+
+
+def configure_stdio() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
+
+
+def has_placeholder(value: str) -> bool:
+    return "{{" in value or "}}" in value
 
 
 def read_text(path: Path) -> str | None:
@@ -201,7 +207,7 @@ def cmd_init(root: Path) -> int:
         template = templates_dir() / template_name
         text = read_text(template)
         if text is None:
-            print(f"ERROR: 缺少模板 {template}", file=sys.stderr)
+            print(f"错误：缺少模板 {template}", file=sys.stderr)
             return 1
         text = text.replace("{{DATE}}", today)
         if template_name == "profile.md" and migrate:
@@ -211,11 +217,11 @@ def cmd_init(root: Path) -> int:
         write_atomic(target, text)
         created.append(target.relative_to(root).as_posix())
     for item in created:
-        print(f"created: {item}")
+        print(f"已创建：{item}")
     for item in skipped:
-        print(f"skipped: {item}")
+        print(f"已跳过：{item}")
     if migrate:
-        print("migrated: ventures/profile.md -> ventures/me/profile.md")
+        print("已迁移：ventures/profile.md -> ventures/me/profile.md")
     return 0
 
 
@@ -265,6 +271,8 @@ def latest_open_note(direction: Path) -> tuple[Path, dict[str, str], str] | None
 
 
 def open_todos(direction: Path, limit: int = 3) -> list[str]:
+    if limit <= 0:
+        return []
     text = read_text(direction / "TODO.md")
     if not text:
         return []
@@ -294,7 +302,7 @@ def collect_context(ventures: Path) -> dict:
             warnings.extend(f"{main_slug}: {error}" for error in plan_errors)
             main = {
                 "slug": main_slug,
-                "name": plan.get("name", main_slug),
+                "name": plan.get("name") or main_slug,
                 "stage": plan.get("stage", ""),
                 "one_liner": plan.get("one_liner", ""),
                 "next_action": plan.get("next_action", ""),
@@ -311,7 +319,7 @@ def collect_context(ventures: Path) -> dict:
         incubating.append(
             {
                 "slug": slug,
-                "name": plan.get("name", slug),
+                "name": plan.get("name") or slug,
                 "stage": plan.get("stage", ""),
             }
         )
@@ -414,6 +422,18 @@ def name_errors(name: str, allow_comma: bool) -> list[str]:
     return errors
 
 
+def check_placeholders(
+    meta: dict[str, str],
+    keys: tuple[str, ...],
+    prefix: str,
+    errors: list[str],
+) -> None:
+    for key in keys:
+        value = meta.get(key, "")
+        if value and has_placeholder(value):
+            errors.append(f"{prefix}: {key} 存在未替换的模板占位符：{value}")
+
+
 def validate_note(
     direction: Path, path: Path, errors: list[str], warnings: list[str]
 ) -> None:
@@ -425,6 +445,12 @@ def validate_note(
     meta, _body, fm_errors = parse_frontmatter(text)
     for error in fm_errors:
         errors.append(f"{direction.name}/{rel}: {error}")
+    check_placeholders(
+        meta,
+        ("title", "date", "direction", "mode", "status", "next_step"),
+        f"{direction.name}/{rel}",
+        errors,
+    )
     for key in ("title", "date", "direction", "mode", "status"):
         if key not in meta:
             errors.append(f"{direction.name}/{rel}: 缺少 frontmatter: {key}")
@@ -458,6 +484,12 @@ def validate_brief(
     meta, body, fm_errors = parse_frontmatter(text)
     for error in fm_errors:
         errors.append(f"{direction.name}/{rel}: {error}")
+    check_placeholders(
+        meta,
+        ("title", "date", "direction", "output_type", "status", "due"),
+        f"{direction.name}/{rel}",
+        errors,
+    )
     for key in ("title", "date", "direction", "output_type", "status"):
         if key not in meta:
             errors.append(f"{direction.name}/{rel}: 缺少 frontmatter: {key}")
@@ -485,6 +517,12 @@ def validate_output(
     meta, _body, fm_errors = parse_frontmatter(text)
     for error in fm_errors:
         errors.append(f"{direction.name}/{rel}: {error}")
+    check_placeholders(
+        meta,
+        ("title", "date", "direction", "brief", "version", "status", "author"),
+        f"{direction.name}/{rel}",
+        errors,
+    )
     for key in ("title", "date", "direction", "brief", "version", "status", "author"):
         if key not in meta:
             errors.append(f"{direction.name}/{rel}: 缺少 frontmatter: {key}")
@@ -554,6 +592,8 @@ def validate_workspace(ventures: Path) -> tuple[list[str], list[str]]:
 
     check_registered("incubating", incubating)
     check_registered("archived", archived)
+    for slug in sorted(set(incubating) & set(archived)):
+        errors.append(f"incubating 与 archived 重复：{slug}")
     if main:
         if main not in dir_names:
             errors.append(f"main 指向不存在的方向：{main}")
@@ -584,6 +624,7 @@ def validate_workspace(ventures: Path) -> tuple[list[str], list[str]]:
         for key in REQUIRED_PLAN_KEYS:
             if key not in plan:
                 errors.append(f"{slug}/PLAN.md: 缺少 frontmatter: {key}")
+        check_placeholders(plan, REQUIRED_PLAN_KEYS, f"{slug}/PLAN.md", errors)
         if not plan.get("name", "").strip():
             errors.append(f"{slug}/PLAN.md: name 为空")
         stage = plan.get("stage", "").strip()
@@ -593,6 +634,8 @@ def validate_workspace(ventures: Path) -> tuple[list[str], list[str]]:
             errors.append(
                 f"{slug}: 已登记为归档，但 PLAN.md stage 不是 archived"
             )
+        if stage == "archived" and slug not in archived:
+            errors.append(f"方向 stage 为 archived 但未登记在 archived：{slug}")
         notes_dir = direction / "notes"
         if notes_dir.is_dir():
             for note_path in sorted(notes_dir.glob("*.md")):
@@ -620,9 +663,9 @@ def cmd_context(root: Path, as_json: bool) -> int:
 def cmd_validate(root: Path) -> int:
     errors, warnings = validate_workspace(root / "ventures")
     for warning in warnings:
-        print(f"WARNING: {warning}")
+        print(f"警告：{warning}")
     for error in errors:
-        print(f"ERROR: {error}")
+        print(f"错误：{error}")
     if errors:
         print(f"校验失败：{len(errors)} 个错误，{len(warnings)} 个警告")
         return 1
@@ -631,6 +674,7 @@ def cmd_validate(root: Path) -> int:
 
 
 def main(argv: list[str] | None = None, root: Path | None = None) -> int:
+    configure_stdio()
     parser = argparse.ArgumentParser(prog="advisor")
     parser.add_argument("--root", type=Path, default=None, help="项目根目录，默认当前目录")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -641,12 +685,16 @@ def main(argv: list[str] | None = None, root: Path | None = None) -> int:
     args = parser.parse_args(argv)
     base = (Path(root) if root is not None else args.root) or Path.cwd()
     base = base.resolve()
-    if args.command == "init":
-        return cmd_init(base)
-    if args.command == "context":
-        return cmd_context(base, args.json)
-    if args.command == "validate":
-        return cmd_validate(base)
+    try:
+        if args.command == "init":
+            return cmd_init(base)
+        if args.command == "context":
+            return cmd_context(base, args.json)
+        if args.command == "validate":
+            return cmd_validate(base)
+    except (OSError, UnicodeError) as error:
+        print(f"错误：{error}", file=sys.stderr)
+        return 1
     parser.error("未知命令")
     return 2
 

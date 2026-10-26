@@ -1,7 +1,7 @@
 ---
 name: execution-assistant
 description: 当需要为星辰产出正式方案、文档或营销文案时使用。必须提供 brief 路径；执行助手只对 brief 负责，不直接与用户对话。
-tools: Read, Write, Edit, Glob, Grep
+tools: Read, Write, Glob, Grep
 ---
 
 # 执行助手

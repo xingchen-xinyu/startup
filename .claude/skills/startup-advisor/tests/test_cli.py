@@ -20,7 +20,7 @@ class InitTests(unittest.TestCase):
                 "me/writing-style.md",
             ):
                 self.assertTrue((ventures / rel).is_file(), rel)
-            self.assertIn("created: ventures/portfolio.md", out)
+            self.assertIn("已创建：ventures/portfolio.md", out)
 
     def test_init_is_idempotent_and_preserves_content(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -35,7 +35,7 @@ class InitTests(unittest.TestCase):
             code, out, err = run_cli(root, "init")
             self.assertEqual(code, 0, out + err)
             self.assertIn("称呼：星辰", profile.read_text(encoding="utf-8"))
-            self.assertIn("skipped: ventures/me/profile.md", out)
+            self.assertIn("已跳过：ventures/me/profile.md", out)
 
     def test_init_migrates_legacy_profile(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -48,7 +48,7 @@ class InitTests(unittest.TestCase):
             self.assertTrue(new_profile.is_file())
             self.assertIn("称呼：星辰", new_profile.read_text(encoding="utf-8"))
             self.assertTrue(legacy.is_file())
-            self.assertIn("migrated:", out)
+            self.assertIn("已迁移：", out)
 
 
 class ProfileBomTests(unittest.TestCase):
@@ -188,6 +188,23 @@ class ContextTests(unittest.TestCase):
             self.assertEqual(code, 0, out + err)
             self.assertIn("主攻：AI 知识库（validating）", out)
             self.assertIn("下一步：访谈 3 家团队", out)
+
+    def test_context_empty_plan_name_falls_back_to_slug(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ventures = init_workspace(root)
+            write(ventures / "ai-kb/PLAN.md", make_plan(name=""))
+            write(ventures / "pet-social/PLAN.md", make_plan("", "idea"))
+            write(
+                ventures / "portfolio.md",
+                "---\nmain: ai-kb\nincubating: pet-social\narchived:\n"
+                "updated: 2026-10-26\n---\n",
+            )
+            code, out, err = run_cli(root, "context", "--json")
+            self.assertEqual(code, 0, out + err)
+            data = json.loads(out)
+            self.assertEqual(data["main"]["name"], "ai-kb")
+            self.assertEqual(data["incubating"][0]["name"], "pet-social")
 
 
 def valid_workspace(root: Path) -> Path:
@@ -397,10 +414,115 @@ class ValidateTests(unittest.TestCase):
             write(ventures / ".state.json", "{}\n")
             code, out, err = run_cli(root, "validate")
             self.assertEqual(code, 0, out + err)
-            self.assertIn("WARNING: 发现旧 ventures/.state.json", out)
+            self.assertIn("警告：发现旧 ventures/.state.json", out)
 
     def test_direction_name_rejects_comma(self):
         from helpers import advisor
 
         self.assertTrue(advisor.name_errors("bad,name", allow_comma=False))
         self.assertFalse(advisor.name_errors("bad,name", allow_comma=True))
+
+    def test_incubating_archived_overlap(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ventures = valid_workspace(root)
+            write(
+                ventures / "portfolio.md",
+                "---\nmain: ai-kb\nincubating: pet-social\narchived: pet-social\n"
+                "updated: 2026-10-26\n---\n",
+            )
+            code, out, err = run_cli(root, "validate")
+            self.assertEqual(code, 1, out + err)
+            self.assertIn("incubating 与 archived 重复：pet-social", out)
+
+    def test_archived_stage_requires_archived_registration(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ventures = valid_workspace(root)
+            write(ventures / "pet-social/PLAN.md", make_plan("宠物社交", "archived"))
+            code, out, err = run_cli(root, "validate")
+            self.assertEqual(code, 1, out + err)
+            self.assertIn(
+                "方向 stage 为 archived 但未登记在 archived：pet-social", out
+            )
+
+    def test_plan_placeholder_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ventures = valid_workspace(root)
+            write(ventures / "ai-kb/PLAN.md", make_plan(name="{{NAME}}"))
+            code, out, err = run_cli(root, "validate")
+            self.assertEqual(code, 1, out + err)
+            self.assertIn("存在未替换的模板占位符", out)
+
+    def test_note_placeholder_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ventures = valid_workspace(root)
+            write(
+                ventures / "ai-kb/notes/2026-10-26-定价.md",
+                "---\ntitle: {{TITLE}}\ndate: 2026-10-26\ndirection: ai-kb\n"
+                "mode: coach\nstatus: open\nnext_step: 继续\n---\n",
+            )
+            code, out, err = run_cli(root, "validate")
+            self.assertEqual(code, 1, out + err)
+            self.assertIn("存在未替换的模板占位符", out)
+
+    def test_brief_placeholder_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ventures = valid_workspace(root)
+            write(
+                ventures / "ai-kb/briefs/2026-10-26-发布文案.md",
+                "---\ntitle: {{TITLE}}\ndate: 2026-10-26\ndirection: ai-kb\n"
+                "output_type: launch-copy\nstatus: approved\n---\n\n"
+                "## 参考材料\n- `PLAN.md`\n",
+            )
+            code, out, err = run_cli(root, "validate")
+            self.assertEqual(code, 1, out + err)
+            self.assertIn("存在未替换的模板占位符", out)
+
+    def test_output_placeholder_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ventures = valid_workspace(root)
+            write(
+                ventures / "ai-kb/outputs/2026-10-26-发布文案-v1.md",
+                "---\ntitle: {{TITLE}}\ndate: 2026-10-26\ndirection: ai-kb\n"
+                "brief: briefs/2026-10-26-发布文案.md\nversion: 1\n"
+                "status: draft\nauthor: execution-assistant\n---\n",
+            )
+            code, out, err = run_cli(root, "validate")
+            self.assertEqual(code, 1, out + err)
+            self.assertIn("存在未替换的模板占位符", out)
+
+
+class OpenTodosTests(unittest.TestCase):
+    def test_non_positive_limit_returns_empty(self):
+        from helpers import advisor
+
+        with tempfile.TemporaryDirectory() as tmp:
+            direction = Path(tmp)
+            write(direction / "TODO.md", "- [ ] 访谈 3 家\n")
+            self.assertEqual(advisor.open_todos(direction, limit=0), [])
+            self.assertEqual(advisor.open_todos(direction, limit=-1), [])
+            self.assertEqual(advisor.open_todos(direction, limit=1), ["访谈 3 家"])
+
+
+class ErrorBoundaryTests(unittest.TestCase):
+    def test_oserror_prints_single_chinese_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            original = advisor.cmd_validate
+
+            def boom(_root):
+                raise OSError("磁盘读取失败")
+
+            advisor.cmd_validate = boom
+            try:
+                code, out, err = run_cli(root, "validate")
+            finally:
+                advisor.cmd_validate = original
+            self.assertEqual(code, 1)
+            self.assertIn("错误：磁盘读取失败", err)
+            self.assertEqual(err.count("错误："), 1)

@@ -21,7 +21,7 @@ ventures/
 
 `me/` 和 `portfolio.md` 是全局共享。所有方向都是一等目录，主攻/孵化只是 `portfolio.md` 中的标记，不设 `_inbox` 转正。
 
-`decisions.md`、`TODO.md`、`notes/`、`briefs/`、`outputs/` 缺失是正常状态，首次产生内容时创建。
+`decisions.md`、`TODO.md`、`notes/`、`briefs/`、`outputs/`、`me/insights.md` 缺失是正常状态，首次产生内容时创建。
 
 ## 2. 文件格式
 
@@ -57,6 +57,8 @@ frontmatter 只有 `updated`。正文固定节：
 - 变更记录：日期 + 变化摘要
 
 只记稳定事实。信息冲突时以最新确认为准，旧值保留在变更记录中。
+
+迁移说明：`init` 发现旧 `ventures/profile.md` 时会保留原文件，并把其正文追加到新 `me/profile.md` 的 `## 迁移内容` 下；不做字段级合并，需要人工整理。
 
 ### 2.3 `me/self.md`
 
@@ -176,7 +178,7 @@ due: 2026-10-28
 ---
 ```
 
-`status`：`draft` / `approved` / `delivered`。
+`status`：`draft` / `approved` / `delivered`。`due` 可选，没有截止时间时留空。
 
 正文固定节：目标、读者与渠道、交付物、必须包含、不能出现、文风与格式、参考材料、验收标准、截止时间。
 
@@ -207,15 +209,15 @@ author: execution-assistant
 - [ ] [P2] 整理竞品清单
 ```
 
-不设 ID，不做 CLI，不维护独立状态机。完成项改 `[x]`，不删除。
+不设 ID，不提供独立 CLI 命令或状态机。完成项改 `[x]`，不删除。
 
 ## 3. 取值与字段
 
 | 对象 | 必填 frontmatter | 取值 |
 |---|---|---|
 | PLAN.md | name, stage, one_liner, created, updated, next_action | stage 七选一 |
-| notes | title, date, direction, mode, status, next_step | mode 三选一；status 二选一 |
-| briefs | title, date, direction, output_type, status, due（可为空） | status 三选一 |
+| notes | title, date, direction, mode, status（`status: open` 时另需 next_step） | mode 三选一；status 二选一 |
+| briefs | title, date, direction, output_type, status | due 可选；status 三选一 |
 | outputs | title, date, direction, brief, version, status, author | status 三选一；version ≥ 1 |
 
 ## 4. 更新规则
@@ -240,6 +242,7 @@ author: execution-assistant
 
 - `portfolio.md`
 - `me/profile.md`、`me/self.md`（存在则读）
+- `me/writing-style.md`（只检查是否为空）
 - 当前主攻的 `PLAN.md`
 - 最近一份 `status: open` 的纪要
 - `TODO.md` 前几条未完成项
