@@ -40,3 +40,10 @@ class ExecutionPlaybookTests(unittest.TestCase):
             "正例与反例",
         ):
             self.assertIn(token, text)
+
+
+class MemoryModelTests(unittest.TestCase):
+    def test_sections(self):
+        text = (BASE / "references/memory-model.md").read_text(encoding="utf-8")
+        for token in ("目录结构", "frontmatter", "更新规则", "读写策略", "命名"):
+            self.assertIn(token, text)
