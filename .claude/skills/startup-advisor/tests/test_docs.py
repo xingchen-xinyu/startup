@@ -19,3 +19,10 @@ class SkillDocTests(unittest.TestCase):
             "收尾",
         ):
             self.assertIn(token, text)
+
+
+class CoachingPlaybookTests(unittest.TestCase):
+    def test_sections(self):
+        text = (BASE / "references/coaching-playbook.md").read_text(encoding="utf-8")
+        for token in ("访谈模块", "提问法", "阶段剧本", "Lean Canvas", "失败模式"):
+            self.assertIn(token, text)
