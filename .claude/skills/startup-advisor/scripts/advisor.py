@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import tempfile
 from datetime import date
@@ -22,6 +23,25 @@ PLACEHOLDER_VALUES = {
     "（尚未确认的信息）",
     "(尚未确认的信息)",
 }
+STAGES = {"explore", "idea", "validating", "building", "operating", "paused", "archived"}
+NOTE_MODES = {"coach", "exec", "mixed"}
+NOTE_STATUSES = {"open", "closed"}
+BRIEF_STATUSES = {"draft", "approved", "delivered"}
+OUTPUT_STATUSES = {"draft", "review", "final"}
+REQUIRED_PLAN_KEYS = (
+    "name",
+    "stage",
+    "one_liner",
+    "created",
+    "updated",
+    "next_action",
+)
+WINDOWS_ILLEGAL = set('<>:"/\\|?*')
+RESERVED_NAMES = (
+    {"CON", "PRN", "AUX", "NUL"}
+    | {f"COM{i}" for i in range(1, 10)}
+    | {f"LPT{i}" for i in range(1, 10)}
+)
 
 
 def read_text(path: Path) -> str | None:
@@ -369,6 +389,218 @@ def print_context(context: dict) -> None:
             print(f"- {warning}")
 
 
+def name_errors(name: str, allow_comma: bool) -> list[str]:
+    errors: list[str] = []
+    if not name:
+        return ["名称为空"]
+    illegal = set(WINDOWS_ILLEGAL)
+    if not allow_comma:
+        illegal.add(",")
+    found = sorted({char for char in name if char in illegal or ord(char) < 32})
+    if found:
+        errors.append("包含非法字符：" + "".join(found))
+    stem = name.split(".")[0].upper()
+    if stem in RESERVED_NAMES:
+        errors.append("使用了 Windows 保留名")
+    if name != name.strip(" ."):
+        errors.append("首尾包含空白或点")
+    return errors
+
+
+def validate_note(
+    direction: Path, path: Path, errors: list[str], warnings: list[str]
+) -> None:
+    rel = path.relative_to(direction).as_posix()
+    text = read_text(path)
+    if text is None:
+        errors.append(f"{direction.name}/{rel}: 无法读取或不是 UTF-8")
+        return
+    meta, _body, fm_errors = parse_frontmatter(text)
+    for error in fm_errors:
+        errors.append(f"{direction.name}/{rel}: {error}")
+    for key in ("title", "date", "direction", "mode", "status"):
+        if key not in meta:
+            errors.append(f"{direction.name}/{rel}: 缺少 frontmatter: {key}")
+    for key in ("title", "date", "direction"):
+        if key in meta and not meta[key].strip():
+            errors.append(f"{direction.name}/{rel}: {key} 为空")
+    if meta.get("direction") and meta["direction"] != direction.name:
+        errors.append(
+            f"{direction.name}/{rel}: direction={meta['direction']} 与目录不一致"
+        )
+    if meta.get("mode") and meta["mode"] not in NOTE_MODES:
+        errors.append(f"{direction.name}/{rel}: 非法 mode: {meta['mode']}")
+    if meta.get("status") and meta["status"] not in NOTE_STATUSES:
+        errors.append(f"{direction.name}/{rel}: 非法 status: {meta['status']}")
+    if meta.get("status") == "open" and not meta.get("next_step", "").strip():
+        errors.append(f"{direction.name}/{rel}: open 纪要缺少 next_step")
+    if not re.match(r"^\d{4}-\d{2}-\d{2}-", path.name):
+        warnings.append(f"{direction.name}/{rel}: 文件名不是 YYYY-MM-DD- 开头")
+    for error in name_errors(path.name, allow_comma=True):
+        errors.append(f"{direction.name}/{rel}: 文件名 {error}")
+
+
+def validate_brief(
+    direction: Path, path: Path, errors: list[str], warnings: list[str]
+) -> None:
+    rel = path.relative_to(direction).as_posix()
+    text = read_text(path)
+    if text is None:
+        errors.append(f"{direction.name}/{rel}: 无法读取或不是 UTF-8")
+        return
+    meta, body, fm_errors = parse_frontmatter(text)
+    for error in fm_errors:
+        errors.append(f"{direction.name}/{rel}: {error}")
+    for key in ("title", "date", "direction", "output_type", "status"):
+        if key not in meta:
+            errors.append(f"{direction.name}/{rel}: 缺少 frontmatter: {key}")
+    if meta.get("direction") and meta["direction"] != direction.name:
+        errors.append(
+            f"{direction.name}/{rel}: direction={meta['direction']} 与目录不一致"
+        )
+    if meta.get("status") and meta["status"] not in BRIEF_STATUSES:
+        errors.append(f"{direction.name}/{rel}: 非法 status: {meta['status']}")
+    for ref in re.findall(r"`([^`]+)`", body_section(body, "参考材料")):
+        if ref.endswith(".md") and "/" in ref and not (direction / ref).is_file():
+            errors.append(f"{direction.name}/{rel}: 参考材料不存在：{ref}")
+    for error in name_errors(path.name, allow_comma=True):
+        errors.append(f"{direction.name}/{rel}: 文件名 {error}")
+
+
+def validate_output(
+    direction: Path, path: Path, errors: list[str], warnings: list[str]
+) -> None:
+    rel = path.relative_to(direction).as_posix()
+    text = read_text(path)
+    if text is None:
+        errors.append(f"{direction.name}/{rel}: 无法读取或不是 UTF-8")
+        return
+    meta, _body, fm_errors = parse_frontmatter(text)
+    for error in fm_errors:
+        errors.append(f"{direction.name}/{rel}: {error}")
+    for key in ("title", "date", "direction", "brief", "version", "status", "author"):
+        if key not in meta:
+            errors.append(f"{direction.name}/{rel}: 缺少 frontmatter: {key}")
+    if meta.get("direction") and meta["direction"] != direction.name:
+        errors.append(
+            f"{direction.name}/{rel}: direction={meta['direction']} 与目录不一致"
+        )
+    if meta.get("status") and meta["status"] not in OUTPUT_STATUSES:
+        errors.append(f"{direction.name}/{rel}: 非法 status: {meta['status']}")
+    version = meta.get("version", "")
+    if not version.isdigit() or int(version) < 1:
+        errors.append(f"{direction.name}/{rel}: version 必须是 >=1 的整数")
+    brief = meta.get("brief", "").strip()
+    if not brief:
+        errors.append(f"{direction.name}/{rel}: 缺少 brief 引用")
+    elif not (direction / brief).is_file():
+        errors.append(f"{direction.name}/{rel}: brief 不存在：{brief}")
+    for error in name_errors(path.name, allow_comma=True):
+        errors.append(f"{direction.name}/{rel}: 文件名 {error}")
+
+
+def validate_workspace(ventures: Path) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    if not ventures.is_dir():
+        return [f"工作区不存在：{ventures}"], warnings
+    required = (
+        "portfolio.md",
+        "me/profile.md",
+        "me/self.md",
+        "me/writing-style.md",
+    )
+    for rel in required:
+        path = ventures / rel
+        if not path.is_file():
+            errors.append(f"缺少必填文件：ventures/{rel}")
+        elif read_text(path) is None:
+            errors.append(f"无法读取或不是 UTF-8：ventures/{rel}")
+    if (ventures / ".state.json").exists():
+        warnings.append("发现旧 ventures/.state.json；新设计已不再读取，可手工删除")
+    portfolio_path = ventures / "portfolio.md"
+    meta: dict[str, str] = {}
+    if portfolio_path.is_file():
+        text = read_text(portfolio_path)
+        if text is None:
+            errors.append("无法读取或不是 UTF-8：ventures/portfolio.md")
+        else:
+            meta, _body, fm_errors = parse_frontmatter(text)
+            for error in fm_errors:
+                errors.append(f"portfolio.md: {error}")
+            if "updated" not in meta:
+                errors.append("portfolio.md 缺少 frontmatter: updated")
+    main = meta.get("main", "").strip()
+    incubating = split_csv(meta.get("incubating", ""))
+    archived = split_csv(meta.get("archived", ""))
+    dirs = list_direction_dirs(ventures)
+    dir_names = {path.name for path in dirs}
+
+    def check_registered(label: str, items: list[str]) -> None:
+        seen: set[str] = set()
+        for item in items:
+            if item in seen:
+                errors.append(f"{label} 重复登记：{item}")
+            seen.add(item)
+            if item not in dir_names:
+                errors.append(f"{label} 指向不存在的方向：{item}")
+
+    check_registered("incubating", incubating)
+    check_registered("archived", archived)
+    if main:
+        if main not in dir_names:
+            errors.append(f"main 指向不存在的方向：{main}")
+        if main in incubating:
+            errors.append(f"main 与 incubating 重复：{main}")
+        if main in archived:
+            errors.append(f"main 与 archived 重复：{main}")
+    registered = set(incubating) | set(archived) | ({main} if main else set())
+    for direction in dirs:
+        slug = direction.name
+        if slug not in registered:
+            errors.append(f"方向未在 portfolio.md 登记：{slug}")
+        for error in name_errors(slug, allow_comma=False):
+            errors.append(f"方向目录名 {slug}: {error}")
+        if len(slug) > 48:
+            errors.append(f"方向目录名 {slug}: 超过 48 字符")
+        plan_path = direction / "PLAN.md"
+        if not plan_path.is_file():
+            errors.append(f"{slug}: 缺少 PLAN.md")
+            continue
+        plan_text = read_text(plan_path)
+        if plan_text is None:
+            errors.append(f"{slug}/PLAN.md: 无法读取或不是 UTF-8")
+            continue
+        plan, _plan_body, fm_errors = parse_frontmatter(plan_text)
+        for error in fm_errors:
+            errors.append(f"{slug}/PLAN.md: {error}")
+        for key in REQUIRED_PLAN_KEYS:
+            if key not in plan:
+                errors.append(f"{slug}/PLAN.md: 缺少 frontmatter: {key}")
+        if not plan.get("name", "").strip():
+            errors.append(f"{slug}/PLAN.md: name 为空")
+        stage = plan.get("stage", "").strip()
+        if stage not in STAGES:
+            errors.append(f"{slug}/PLAN.md: 非法 stage: {stage}")
+        if slug in archived and stage != "archived":
+            errors.append(
+                f"{slug}: 已登记为归档，但 PLAN.md stage 不是 archived"
+            )
+        notes_dir = direction / "notes"
+        if notes_dir.is_dir():
+            for note_path in sorted(notes_dir.glob("*.md")):
+                validate_note(direction, note_path, errors, warnings)
+        briefs_dir = direction / "briefs"
+        if briefs_dir.is_dir():
+            for brief_path in sorted(briefs_dir.glob("*.md")):
+                validate_brief(direction, brief_path, errors, warnings)
+        outputs_dir = direction / "outputs"
+        if outputs_dir.is_dir():
+            for output_path in sorted(outputs_dir.glob("*.md")):
+                validate_output(direction, output_path, errors, warnings)
+    return errors, warnings
+
+
 def cmd_context(root: Path, as_json: bool) -> int:
     context = collect_context(root / "ventures")
     if as_json:
@@ -379,8 +611,16 @@ def cmd_context(root: Path, as_json: bool) -> int:
 
 
 def cmd_validate(root: Path) -> int:
-    print("validate 尚未实现", file=sys.stderr)
-    return 1
+    errors, warnings = validate_workspace(root / "ventures")
+    for warning in warnings:
+        print(f"WARNING: {warning}")
+    for error in errors:
+        print(f"ERROR: {error}")
+    if errors:
+        print(f"校验失败：{len(errors)} 个错误，{len(warnings)} 个警告")
+        return 1
+    print(f"校验通过：0 个错误，{len(warnings)} 个警告")
+    return 0
 
 
 def main(argv: list[str] | None = None, root: Path | None = None) -> int:

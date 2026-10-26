@@ -175,3 +175,219 @@ class ContextTests(unittest.TestCase):
             self.assertEqual(code, 0, out + err)
             self.assertIn("主攻：AI 知识库（validating）", out)
             self.assertIn("下一步：访谈 3 家团队", out)
+
+
+def valid_workspace(root: Path) -> Path:
+    ventures = init_workspace(root)
+    write(
+        ventures / "portfolio.md",
+        "---\nmain: ai-kb\nincubating: pet-social\narchived:\n"
+        "updated: 2026-10-26\n---\n\n# 创业组合\n",
+    )
+    write(
+        ventures / "ai-kb/PLAN.md",
+        "---\nname: AI 知识库\nstage: validating\n"
+        "one_liner: 帮小团队做内部知识库\n"
+        "created: 2026-10-20\nupdated: 2026-10-26\n"
+        "next_action: 访谈 3 家团队\n---\n",
+    )
+    write(
+        ventures / "pet-social/PLAN.md",
+        "---\nname: 宠物社交\nstage: idea\none_liner: 宠物主人社交\n"
+        "created: 2026-10-20\nupdated: 2026-10-26\n"
+        "next_action: 访谈 5 位宠物主\n---\n",
+    )
+    write(
+        ventures / "ai-kb/notes/2026-10-26-定价.md",
+        "---\ntitle: 定价\ndate: 2026-10-26\ndirection: ai-kb\n"
+        "mode: coach\nstatus: open\nnext_step: 访谈 3 家\n---\n\n"
+        "## 未决问题\n- 定价锚点？\n",
+    )
+    write(
+        ventures / "ai-kb/briefs/2026-10-26-发布文案.md",
+        "---\ntitle: 发布文案\ndate: 2026-10-26\ndirection: ai-kb\n"
+        "output_type: launch-copy\nstatus: approved\ndue: 2026-10-28\n---\n\n"
+        "## 参考材料\n- `PLAN.md`\n",
+    )
+    write(
+        ventures / "ai-kb/outputs/2026-10-26-发布文案-v1.md",
+        "---\ntitle: 发布文案\ndate: 2026-10-26\ndirection: ai-kb\n"
+        "brief: briefs/2026-10-26-发布文案.md\nversion: 1\nstatus: draft\n"
+        "author: execution-assistant\n---\n\n# 发布文案\n",
+    )
+    write(ventures / "ai-kb/TODO.md", "- [ ] 访谈 3 家\n")
+    return ventures
+
+
+class ValidateTests(unittest.TestCase):
+    def test_valid_workspace_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            valid_workspace(root)
+            code, out, err = run_cli(root, "validate")
+            self.assertEqual(code, 0, out + err)
+            self.assertIn("校验通过", out)
+
+    def test_optional_files_may_be_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            init_workspace(root)
+            code, out, err = run_cli(root, "validate")
+            self.assertEqual(code, 0, out + err)
+
+    def test_main_points_to_missing_direction(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ventures = valid_workspace(root)
+            write(
+                ventures / "portfolio.md",
+                "---\nmain: missing\nincubating: pet-social\narchived:\n"
+                "updated: 2026-10-26\n---\n",
+            )
+            code, out, err = run_cli(root, "validate")
+            self.assertEqual(code, 1, out + err)
+            self.assertIn("main 指向不存在的方向：missing", out)
+
+    def test_unregistered_direction(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ventures = valid_workspace(root)
+            write(
+                ventures / "portfolio.md",
+                "---\nmain: ai-kb\nincubating:\narchived:\n"
+                "updated: 2026-10-26\n---\n",
+            )
+            code, out, err = run_cli(root, "validate")
+            self.assertEqual(code, 1, out + err)
+            self.assertIn("方向未在 portfolio.md 登记：pet-social", out)
+
+    def test_duplicate_registration(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ventures = valid_workspace(root)
+            write(
+                ventures / "portfolio.md",
+                "---\nmain: ai-kb\nincubating: ai-kb, pet-social\narchived:\n"
+                "updated: 2026-10-26\n---\n",
+            )
+            code, out, err = run_cli(root, "validate")
+            self.assertEqual(code, 1, out + err)
+            self.assertIn("main 与 incubating 重复：ai-kb", out)
+
+    def test_invalid_stage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ventures = valid_workspace(root)
+            write(
+                ventures / "ai-kb/PLAN.md",
+                "---\nname: AI 知识库\nstage: foo\none_liner: x\n"
+                "created: 2026-10-20\nupdated: 2026-10-26\nnext_action: x\n---\n",
+            )
+            code, out, err = run_cli(root, "validate")
+            self.assertEqual(code, 1, out + err)
+            self.assertIn("非法 stage: foo", out)
+
+    def test_note_direction_mismatch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ventures = valid_workspace(root)
+            write(
+                ventures / "ai-kb/notes/2026-10-26-定价.md",
+                "---\ntitle: 定价\ndate: 2026-10-26\ndirection: other\n"
+                "mode: coach\nstatus: open\nnext_step: 继续\n---\n",
+            )
+            code, out, err = run_cli(root, "validate")
+            self.assertEqual(code, 1, out + err)
+            self.assertIn("direction=other 与目录不一致", out)
+
+    def test_open_note_missing_next_step(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ventures = valid_workspace(root)
+            write(
+                ventures / "ai-kb/notes/2026-10-26-定价.md",
+                "---\ntitle: 定价\ndate: 2026-10-26\ndirection: ai-kb\n"
+                "mode: coach\nstatus: open\nnext_step:\n---\n",
+            )
+            code, out, err = run_cli(root, "validate")
+            self.assertEqual(code, 1, out + err)
+            self.assertIn("open 纪要缺少 next_step", out)
+
+    def test_brief_invalid_status(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ventures = valid_workspace(root)
+            write(
+                ventures / "ai-kb/briefs/2026-10-26-发布文案.md",
+                "---\ntitle: 发布文案\ndate: 2026-10-26\ndirection: ai-kb\n"
+                "output_type: launch-copy\nstatus: unknown\n---\n",
+            )
+            code, out, err = run_cli(root, "validate")
+            self.assertEqual(code, 1, out + err)
+            self.assertIn("非法 status: unknown", out)
+
+    def test_brief_missing_reference(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ventures = valid_workspace(root)
+            write(
+                ventures / "ai-kb/briefs/2026-10-26-发布文案.md",
+                "---\ntitle: 发布文案\ndate: 2026-10-26\ndirection: ai-kb\n"
+                "output_type: launch-copy\nstatus: approved\n---\n\n"
+                "## 参考材料\n- `notes/missing.md`\n",
+            )
+            code, out, err = run_cli(root, "validate")
+            self.assertEqual(code, 1, out + err)
+            self.assertIn("参考材料不存在：notes/missing.md", out)
+
+    def test_output_missing_brief(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ventures = valid_workspace(root)
+            write(
+                ventures / "ai-kb/outputs/2026-10-26-发布文案-v1.md",
+                "---\ntitle: 发布文案\ndate: 2026-10-26\ndirection: ai-kb\n"
+                "brief: briefs/missing.md\nversion: 1\nstatus: draft\n"
+                "author: execution-assistant\n---\n",
+            )
+            code, out, err = run_cli(root, "validate")
+            self.assertEqual(code, 1, out + err)
+            self.assertIn("brief 不存在：briefs/missing.md", out)
+
+    def test_output_bad_version(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ventures = valid_workspace(root)
+            write(
+                ventures / "ai-kb/outputs/2026-10-26-发布文案-v1.md",
+                "---\ntitle: 发布文案\ndate: 2026-10-26\ndirection: ai-kb\n"
+                "brief: briefs/2026-10-26-发布文案.md\nversion: 0\n"
+                "status: draft\nauthor: execution-assistant\n---\n",
+            )
+            code, out, err = run_cli(root, "validate")
+            self.assertEqual(code, 1, out + err)
+            self.assertIn("version 必须是 >=1 的整数", out)
+
+    def test_missing_required_profile(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ventures = valid_workspace(root)
+            (ventures / "me/profile.md").unlink()
+            code, out, err = run_cli(root, "validate")
+            self.assertEqual(code, 1, out + err)
+            self.assertIn("缺少必填文件：ventures/me/profile.md", out)
+
+    def test_legacy_state_file_is_warning_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ventures = valid_workspace(root)
+            write(ventures / ".state.json", "{}\n")
+            code, out, err = run_cli(root, "validate")
+            self.assertEqual(code, 0, out + err)
+            self.assertIn("WARNING: 发现旧 ventures/.state.json", out)
+
+    def test_direction_name_rejects_comma(self):
+        from helpers import advisor
+
+        self.assertTrue(advisor.name_errors("bad,name", allow_comma=False))
+        self.assertFalse(advisor.name_errors("bad,name", allow_comma=True))
