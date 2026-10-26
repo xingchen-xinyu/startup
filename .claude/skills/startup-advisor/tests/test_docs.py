@@ -75,3 +75,39 @@ class ExecutionAgentTests(unittest.TestCase):
             self.assertIn(token, text)
         blocked_section = text.split("## 缺失信息返回格式", 1)[1]
         self.assertIn("BLOCKED", blocked_section)
+
+
+class RequiredFilesTests(unittest.TestCase):
+    def test_all_new_files_exist(self):
+        required = (
+            "SKILL.md",
+            "references/coaching-playbook.md",
+            "references/execution-playbook.md",
+            "references/memory-model.md",
+            "templates/portfolio.md",
+            "templates/profile.md",
+            "templates/self.md",
+            "templates/writing-style.md",
+            "templates/PLAN.md",
+            "templates/note.md",
+            "templates/brief.md",
+            "scripts/advisor.py",
+            "tests/helpers.py",
+            "tests/test_cli.py",
+            "tests/test_docs.py",
+        )
+        for rel in required:
+            self.assertTrue((BASE / rel).is_file(), rel)
+        self.assertTrue(
+            (BASE.parents[1] / "agents/execution-assistant.md").is_file()
+        )
+
+    def test_old_files_are_removed(self):
+        for rel in (
+            "references/conversation-guide.md",
+            "references/data-model.md",
+            "templates/IDEA.md",
+            "templates/PROJECT.md",
+            "templates/discussion.md",
+        ):
+            self.assertFalse((BASE / rel).exists(), rel)
