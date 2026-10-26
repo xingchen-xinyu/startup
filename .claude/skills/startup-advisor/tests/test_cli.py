@@ -68,6 +68,19 @@ class ProfileBomTests(unittest.TestCase):
             self.assertEqual(advisor.profile_state(path), "empty")
 
 
+class WorkspaceProfileStateTests(unittest.TestCase):
+    def test_fresh_workspace_writing_style_is_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ventures = init_workspace(root)
+            writing_style = ventures / "me/writing-style.md"
+            self.assertEqual(advisor.profile_state(writing_style), "empty")
+            code, out, err = run_cli(root, "context", "--json")
+            self.assertEqual(code, 0, out + err)
+            data = json.loads(out)
+            self.assertEqual(data["me"]["writing_style"], "empty")
+
+
 def make_plan(name="AI 知识库", stage="validating"):
     return (
         "---\n"

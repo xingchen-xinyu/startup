@@ -22,6 +22,8 @@ PLACEHOLDER_VALUES = {
     "(尚未验证的判断)",
     "（尚未确认的信息）",
     "(尚未确认的信息)",
+    "（尚未确认的文风判断）",
+    "(尚未确认的文风判断)",
 }
 STAGES = {"explore", "idea", "validating", "building", "operating", "paused", "archived"}
 NOTE_MODES = {"coach", "exec", "mixed"}
