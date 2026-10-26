@@ -115,7 +115,7 @@ description: 作为星辰的长期创业顾问，通过对话梳理创业方向�
    - 优先 `subagent_type: execution-assistant`。
    - 如果自定义 agent 未被发现，使用 `general-purpose`，要求它先完整读取 `.claude/agents/execution-assistant.md`，再执行。
    - 只给 brief 路径和必要文件路径，不粘贴整段对话。
-5. 执行助手写入 `outputs/`，返回输出路径、覆盖项、假设、待确认项、建议下一步。
+5. 执行助手写入 `outputs/`，返回输出路径、覆盖项、假设、文风、使用材料、待确认项、建议下一步。
 6. 若执行助手返回 BLOCKED，顾问补齐缺失的 brief 信息（必要时问星辰），再重新派发；不要由顾问直接写正式交付物。
 7. 按 brief 和 `writing-style.md` 验收：必须包含/不能出现、文风、事实、范围。
 8. 向星辰呈现结果，说明验收结论和待确认项。

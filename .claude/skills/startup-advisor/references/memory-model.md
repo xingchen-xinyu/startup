@@ -246,7 +246,7 @@ author: execution-assistant
 
 按需读取：旧纪要、`decisions.md`、`insights.md` 全文、`writing-style.md`、其他方向的 `PLAN.md`。
 
-执行助手只读：brief、`writing-style.md`、当前方向 `PLAN.md`、本文件、brief 点名的材料。
+执行助手只读：brief、`writing-style.md`、当前方向 `PLAN.md`、本文件、`references/execution-playbook.md`、brief 点名的材料。
 
 ## 6. 命名与编码
 

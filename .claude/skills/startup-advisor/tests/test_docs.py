@@ -66,7 +66,12 @@ class ExecutionAgentTests(unittest.TestCase):
             "execution-playbook.md",
             "截止时间",
             "文风",
+            "文风：",
             "使用材料",
+            "使用材料：",
+            "## 缺失信息返回格式",
             "BLOCKED",
         ):
             self.assertIn(token, text)
+        blocked_section = text.split("## 缺失信息返回格式", 1)[1]
+        self.assertIn("BLOCKED", blocked_section)
