@@ -17,6 +17,7 @@ class SkillDocTests(unittest.TestCase):
             "validate",
             "按需访谈",
             "收尾",
+            "BLOCKED",
         ):
             self.assertIn(token, text)
 
@@ -46,4 +47,26 @@ class MemoryModelTests(unittest.TestCase):
     def test_sections(self):
         text = (BASE / "references/memory-model.md").read_text(encoding="utf-8")
         for token in ("目录结构", "frontmatter", "更新规则", "读写策略", "命名"):
+            self.assertIn(token, text)
+
+
+class ExecutionAgentTests(unittest.TestCase):
+    def test_agent_definition(self):
+        text = (
+            BASE.parents[1] / "agents/execution-assistant.md"
+        ).read_text(encoding="utf-8")
+        for token in (
+            "name: execution-assistant",
+            "description:",
+            "tools:",
+            "身份",
+            "输入",
+            "工作流程",
+            "边界",
+            "execution-playbook.md",
+            "截止时间",
+            "文风",
+            "使用材料",
+            "BLOCKED",
+        ):
             self.assertIn(token, text)
