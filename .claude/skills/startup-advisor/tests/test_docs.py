@@ -31,5 +31,12 @@ class CoachingPlaybookTests(unittest.TestCase):
 class ExecutionPlaybookTests(unittest.TestCase):
     def test_sections(self):
         text = (BASE / "references/execution-playbook.md").read_text(encoding="utf-8")
-        for token in ("brief", "交付物", "文风适配", "验收", "返回格式"):
+        for token in (
+            "brief 写法",
+            "交付物类型与结构",
+            "文风适配",
+            "验收清单",
+            "执行助手返回格式",
+            "正例与反例",
+        ):
             self.assertIn(token, text)
