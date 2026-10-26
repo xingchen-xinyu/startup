@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import tempfile
@@ -191,9 +192,190 @@ def cmd_init(root: Path) -> int:
     return 0
 
 
+def list_direction_dirs(ventures: Path) -> list[Path]:
+    if not ventures.is_dir():
+        return []
+    return sorted(
+        path
+        for path in ventures.iterdir()
+        if path.is_dir() and path.name != "me" and not path.name.startswith(".")
+    )
+
+
+def read_plan(direction: Path) -> tuple[dict[str, str], str, list[str]]:
+    path = direction / "PLAN.md"
+    text = read_text(path)
+    if text is None:
+        return {}, "", [f"{direction.name}/PLAN.md 缺失或无法读取"]
+    return parse_frontmatter(text)
+
+
+def read_portfolio(ventures: Path) -> tuple[dict[str, str], str, list[str]]:
+    path = ventures / "portfolio.md"
+    text = read_text(path)
+    if text is None:
+        return {}, "", ["缺少或无法读取 ventures/portfolio.md"]
+    return parse_frontmatter(text)
+
+
+def latest_open_note(direction: Path) -> tuple[Path, dict[str, str], str] | None:
+    notes = direction / "notes"
+    if not notes.is_dir():
+        return None
+    candidates = []
+    for path in notes.glob("*.md"):
+        text = read_text(path)
+        if text is None:
+            continue
+        meta, body, _ = parse_frontmatter(text)
+        if meta.get("status") == "open":
+            candidates.append((meta.get("date", ""), path.name, path, meta, body))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    _, _, path, meta, body = candidates[0]
+    return path, meta, body
+
+
+def open_todos(direction: Path, limit: int = 3) -> list[str]:
+    text = read_text(direction / "TODO.md")
+    if not text:
+        return []
+    items: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("- [ ] "):
+            items.append(stripped[6:].strip())
+            if len(items) >= limit:
+                break
+    return items
+
+
+def collect_context(ventures: Path) -> dict:
+    warnings: list[str] = []
+    meta, _body, portfolio_errors = read_portfolio(ventures)
+    warnings.extend(portfolio_errors)
+    main_slug = meta.get("main", "").strip()
+    incubating_slugs = split_csv(meta.get("incubating", ""))
+    main = None
+    if main_slug:
+        direction = ventures / main_slug
+        if not direction.is_dir():
+            warnings.append(f"主攻方向不存在：{main_slug}")
+        else:
+            plan, _plan_body, plan_errors = read_plan(direction)
+            warnings.extend(f"{main_slug}: {error}" for error in plan_errors)
+            main = {
+                "slug": main_slug,
+                "name": plan.get("name", main_slug),
+                "stage": plan.get("stage", ""),
+                "one_liner": plan.get("one_liner", ""),
+                "next_action": plan.get("next_action", ""),
+            }
+    incubating = []
+    for slug in incubating_slugs:
+        direction = ventures / slug
+        plan: dict[str, str] = {}
+        if direction.is_dir():
+            plan, _plan_body, plan_errors = read_plan(direction)
+            warnings.extend(f"{slug}: {error}" for error in plan_errors)
+        else:
+            warnings.append(f"孵化方向不存在：{slug}")
+        incubating.append(
+            {
+                "slug": slug,
+                "name": plan.get("name", slug),
+                "stage": plan.get("stage", ""),
+            }
+        )
+    latest = None
+    open_questions: list[str] = []
+    todos: list[str] = []
+    if main_slug and (ventures / main_slug).is_dir():
+        found = latest_open_note(ventures / main_slug)
+        if found:
+            path, note_meta, note_body = found
+            latest = {
+                "path": path.relative_to(ventures.parent).as_posix(),
+                "title": note_meta.get("title", ""),
+                "date": note_meta.get("date", ""),
+                "next_step": note_meta.get("next_step", ""),
+            }
+            open_questions = section_items(note_body, "未决问题")
+        todos = open_todos(ventures / main_slug)
+    me = {
+        "profile": profile_state(ventures / "me" / "profile.md"),
+        "self": profile_state(ventures / "me" / "self.md"),
+        "writing_style": profile_state(ventures / "me" / "writing-style.md"),
+    }
+    empty_files = {
+        "profile": "ventures/me/profile.md",
+        "self": "ventures/me/self.md",
+        "writing_style": "ventures/me/writing-style.md",
+    }
+    for key, label in (
+        ("profile", "个人档案"),
+        ("self", "星辰画像"),
+        ("writing_style", "文风档案"),
+    ):
+        if me[key] == "empty":
+            warnings.append(f"{label}为空：{empty_files[key]}")
+    return {
+        "main": main,
+        "incubating": incubating,
+        "latest_open_note": latest,
+        "open_questions": open_questions,
+        "todos": todos,
+        "me": me,
+        "warnings": warnings,
+    }
+
+
+def print_context(context: dict) -> None:
+    main = context["main"]
+    if main:
+        print(f"主攻：{main['name']}（{main['stage']}）")
+        if main["one_liner"]:
+            print(f"一句话：{main['one_liner']}")
+        print(f"下一步：{main['next_action'] or '未设置'}")
+    else:
+        print("主攻：未设置")
+    latest = context["latest_open_note"]
+    if latest:
+        print(f"最近未结束：{latest['path']} — {latest['title']}")
+        if context["open_questions"]:
+            print("未决问题：")
+            for question in context["open_questions"]:
+                print(f"- {question}")
+    else:
+        print("最近未结束：无")
+    if context["todos"]:
+        print("待办：")
+        for todo in context["todos"]:
+            print(f"- {todo}")
+    if context["incubating"]:
+        names = "、".join(
+            f"{item['name']}（{item['slug']}）" for item in context["incubating"]
+        )
+        print(f"孵化：{names}")
+    me = context["me"]
+    print(
+        f"档案：profile {me['profile']}；self {me['self']}；"
+        f"writing-style {me['writing_style']}"
+    )
+    if context["warnings"]:
+        print("警告：")
+        for warning in context["warnings"]:
+            print(f"- {warning}")
+
+
 def cmd_context(root: Path, as_json: bool) -> int:
-    print("context 尚未实现", file=sys.stderr)
-    return 1
+    context = collect_context(root / "ventures")
+    if as_json:
+        print(json.dumps(context, ensure_ascii=False, indent=2))
+    else:
+        print_context(context)
+    return 0
 
 
 def cmd_validate(root: Path) -> int:
