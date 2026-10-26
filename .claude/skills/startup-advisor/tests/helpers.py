@@ -1,22 +1,29 @@
-import shutil
+import io
 import sys
-import tempfile
-import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-import ws
+import advisor  # noqa: E402
 
 
-class WorkspaceTestCase(unittest.TestCase):
-    def setUp(self):
-        self.root = Path(tempfile.mkdtemp(prefix="advisor-test-"))
-        (self.root / ".claude").mkdir()
-        self.ws = ws.Workspace(self.root)
-        self.ws.init()
+def run_cli(root: Path, *args: str) -> tuple[int, str, str]:
+    stdout, stderr = io.StringIO(), io.StringIO()
+    with redirect_stdout(stdout), redirect_stderr(stderr):
+        code = advisor.main(["--root", str(root), *args])
+    return code, stdout.getvalue(), stderr.getvalue()
 
-    def tearDown(self):
-        shutil.rmtree(self.root, ignore_errors=True)
+
+def write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8", newline="\n")
+
+
+def init_workspace(root: Path) -> Path:
+    code, stdout, stderr = run_cli(root, "init")
+    if code != 0:
+        raise AssertionError(stdout + stderr)
+    return root / "ventures"
