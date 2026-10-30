@@ -143,7 +143,9 @@ next_step: 访谈 3 家团队，确认企业版定价锚点
 `mode`：`coach` / `exec` / `mixed`。`status`：`open` / `closed`。
 顾问档写 mode: coach；参谋档写 mode: exec；同一次讨论两者都有时写 mode: mixed。
 
-正文固定节：议题、关键原话、讨论要点、结论、未决问题、决定、行动项、下一步。
+正文固定节：议题、关键原话、当前理解、讨论要点、结论、未决问题、决定、行动项、下一步。
+
+「当前理解」是本轮理解快照，不是结论；记录真正想聊的、当前卡点、已确认、待确认、这次不要做什么。
 
 - 「关键原话」最多 5–8 条，保留星辰原始表达。
 - `open` 纪要必须有 `next_step`。
@@ -226,6 +228,7 @@ author: execution-assistant
 |---|---|
 | 方案、愿景、用户、价值主张、假设、阶段变化 | 当前方向 `PLAN.md` |
 | 结论、关键原话、未决问题 | 当前纪要 |
+| 理解变化（真正想聊的、卡点、不要做什么） | 当前纪要「当前理解」 |
 | 拍板且影响后续的决定 | `decisions.md`，并在纪要「决定」同步 |
 | 关于星辰的新认知 | `insights.md`，稳定后同步 `self.md` |
 | 稳定事实变化 | `profile.md` + 变更记录 |
@@ -245,6 +248,7 @@ author: execution-assistant
 - `me/writing-style.md`（只检查是否为空）
 - 当前主攻的 `PLAN.md`
 - 最近一份 `status: open` 的纪要
+- 最近纪要中的「当前理解」块
 - `TODO.md` 前几条未完成项
 
 按需读取：旧纪要、`decisions.md`、`insights.md` 全文、`writing-style.md`、其他方向的 `PLAN.md`。

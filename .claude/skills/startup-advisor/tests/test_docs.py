@@ -61,6 +61,7 @@ TEMPLATE_HEADINGS = {
     "note.md": (
         "## 议题",
         "## 关键原话",
+        "## 当前理解",
         "## 讨论要点",
         "## 结论",
         "## 未决问题",
@@ -152,7 +153,7 @@ class ExecutionPlaybookTests(unittest.TestCase):
 class MemoryModelTests(unittest.TestCase):
     def test_sections(self):
         text = (BASE / "references/memory-model.md").read_text(encoding="utf-8")
-        for token in ("目录结构", "frontmatter", "更新规则", "读写策略", "命名"):
+        for token in ("目录结构", "frontmatter", "更新规则", "读写策略", "命名", "当前理解"):
             self.assertIn(token, text)
 
 
