@@ -121,7 +121,17 @@ class TemplateHeadingTests(unittest.TestCase):
 class CoachingPlaybookTests(unittest.TestCase):
     def test_sections(self):
         text = (BASE / "references/coaching-playbook.md").read_text(encoding="utf-8")
-        for token in ("访谈模块", "提问法", "阶段剧本", "Lean Canvas", "失败模式"):
+        for token in (
+            "访谈模块",
+            "提问法",
+            "阶段剧本",
+            "Lean Canvas",
+            "失败模式",
+            "诊断先于方案",
+            "方案门槛",
+            "反馈四步",
+            "最小答案",
+        ):
             self.assertIn(token, text)
 
 
