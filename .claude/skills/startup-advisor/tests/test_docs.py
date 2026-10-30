@@ -22,6 +22,17 @@ class SkillDocTests(unittest.TestCase):
         ):
             self.assertIn(token, text)
 
+    def test_skill_mentions_understanding_protocol(self):
+        text = (BASE / "SKILL.md").read_text(encoding="utf-8")
+        for token in (
+            "理解档",
+            "方案门槛",
+            "反馈回环",
+            "给方案前核对上下文",
+            "发送前自检",
+        ):
+            self.assertIn(token, text)
+
     def test_skill_omits_removed_commands_and_files(self):
         text = (BASE / "SKILL.md").read_text(encoding="utf-8")
         for token in ("resume", "doctor", "project promote", "_inbox"):
